@@ -25,10 +25,14 @@ load_dotenv()
 app = FastAPI(title="Yandex Disk API Proxy")
 
 # CORS для работы с фронтендом
-# В продакшене указать конкретные домены вместо "*"
+# В продакшене можно указать конкретные домены через переменную окружения ALLOWED_ORIGINS
+# Формат: "https://домен1.ru,https://домен2.ru" или "*" для всех
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "*")
+allowed_origins = allowed_origins_str.split(",") if allowed_origins_str != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Разрешаем все источники (для разработки)
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],

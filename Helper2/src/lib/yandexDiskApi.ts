@@ -1,13 +1,14 @@
 /**
- * API функции для работы с Яндекс Диском через локальный бэкэнд
+ * API функции для работы с Яндекс Диском через бэкэнд
  * Только чтение и скачивание файлов
- * Работает с бэкэндом на localhost:8000 (для разработки)
- * После деплоя на TimeWeb замените BACKEND_API_URL на ваш домен
+ * Использует переменную окружения VITE_BACKEND_API_URL для продакшена
+ * По умолчанию использует localhost:8000 для разработки
  */
 
-// Используем локальный бэкэнд для Яндекс Диска
-// После деплоя на TimeWeb замените на: 'https://ваш-домен.timeweb.ru/api/yandex-disk'
-const BACKEND_API_URL = 'http://localhost:8000/api/yandex-disk';
+// Используем переменную окружения для продакшена или localhost для разработки
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL 
+  ? `${import.meta.env.VITE_BACKEND_API_URL}/api/yandex-disk`
+  : 'http://localhost:8000/api/yandex-disk';
 
 export interface YandexDiskFile {
   name: string;
