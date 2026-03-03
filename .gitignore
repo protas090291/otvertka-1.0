@@ -87,3 +87,6 @@ backend/documents/*.pdf
 
 
 Helper2/datasets/training_data/concrete_defect_model.h5
+
+# Documents with long filenames (not needed for deployment)
+Helper2/existing_documents/

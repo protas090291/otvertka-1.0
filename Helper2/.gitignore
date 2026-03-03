@@ -26,3 +26,6 @@ dist-ssr
 .env.local
 .env.production
 .env.*.local
+
+# Documents with long filenames (not needed for deployment)
+existing_documents/
