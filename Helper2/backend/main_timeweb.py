@@ -349,4 +349,11 @@ async def get_view_link_endpoint(file_path: str = Query(...), request: Optional[
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    logger.info(f"🚀 Запуск сервера на порту {port}...")
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=port)
+    except Exception as e:
+        logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА при запуске сервера: {e}")
+        import traceback
+        logger.error(f"   Traceback: {traceback.format_exc()}")
+        raise
