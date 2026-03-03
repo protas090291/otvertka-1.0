@@ -8,17 +8,52 @@ import requests
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 from dotenv import load_dotenv
+from pathlib import Path
 
 # Загружаем переменные окружения из .env файла
-# Упрощенная версия - просто загружаем из текущей директории и окружения
-# В TimeWeb переменные окружения устанавливаются через панель, .env файл не нужен
-try:
-    # Пробуем загрузить из текущей директории (если есть)
-    # В TimeWeb переменные окружения устанавливаются через панель управления
-    load_dotenv(override=False)
-except Exception:
-    # Игнорируем ошибки загрузки .env - переменные могут быть установлены через окружение
-    pass
+# Используем абсолютный путь к файлу .env в директории backend
+script_file = Path(__file__).resolve()
+script_dir = script_file.parent
+
+# Ищем .env файл в директории backend
+# Убираем рекурсивные пути, находим первый 'backend' в пути
+parts = list(script_dir.parts)
+backend_indices = [i for i, part in enumerate(parts) if part == 'backend']
+
+if backend_indices:
+    # Берем первый индекс 'backend'
+    backend_index = backend_indices[0]
+    backend_dir = Path(*parts[:backend_index + 1])
+    env_path = backend_dir / ".env"
+else:
+    # Если не нашли 'backend', используем директорию скрипта
+    env_path = script_dir / ".env"
+
+# Пробуем несколько вариантов загрузки
+env_paths_to_try = [
+    env_path,  # Основной путь
+    script_dir / ".env",  # Рядом со скриптом
+    Path.cwd() / ".env",  # В текущей рабочей директории
+]
+
+loaded = False
+for path in env_paths_to_try:
+    if path.exists():
+        load_dotenv(dotenv_path=path, override=True)
+        loaded = True
+        break
+
+# Если ни один файл не найден, пробуем загрузить из текущей директории
+if not loaded:
+    load_dotenv(override=True)
+
+# Дополнительная проверка: загружаем из всех найденных файлов .env
+# Это гарантирует, что переменные будут загружены
+for path in env_paths_to_try:
+    if path.exists():
+        load_dotenv(dotenv_path=path, override=True)
+        break
+
 # Базовый URL API Яндекс Диска
 YANDEX_DISK_API_BASE = "https://cloud-api.yandex.net/v1/disk"
 
@@ -51,7 +86,8 @@ def is_public_folder() -> bool:
 def get_headers() -> Dict[str, str]:
     """Получить заголовки для запросов к API"""
     # Если используется публичная папка, токен не нужен
-    if get_yandex_disk_public_key():
+    public_key = get_yandex_disk_public_key()
+    if public_key:
         return {
             'Accept': 'application/json'
         }
@@ -59,7 +95,11 @@ def get_headers() -> Dict[str, str]:
     # Для обычных папок требуется OAuth токен
     token = get_yandex_disk_token()
     if not token:
-        raise ValueError("YANDEX_DISK_TOKEN не установлен в переменных окружения. Для публичной папки используйте YANDEX_DISK_PUBLIC_KEY")
+        # НЕ выбрасываем исключение здесь - это может вызвать падение при старте
+        # Вместо этого возвращаем заголовки без авторизации, ошибка будет при использовании API
+        return {
+            'Accept': 'application/json'
+        }
     
     return {
         'Authorization': f'OAuth {token}',
@@ -590,4 +630,3 @@ def get_view_link(file_path: str, public_key: Optional[str] = None) -> str:
         raise Exception(f"Ошибка подключения к API Яндекс Диска: {str(e)}")
     except Exception as e:
         raise Exception(f"Ошибка при получении ссылки для просмотра: {str(e)}")
-
