@@ -298,6 +298,8 @@ async def get_view_link_endpoint(file_path: str = Query(...), request: Optional[
     Returns:
         Ссылка для просмотра через наш бэкэнд
     """
+    if not yandex_disk_api_available:
+        raise HTTPException(status_code=503, detail="Модуль yandex_disk_api недоступен. Проверьте логи приложения.")
     try:
         # Используем наш бэкэнд эндпоинт для просмотра файла
         # Это позволяет открывать файлы в iframe без проблем с CSP
