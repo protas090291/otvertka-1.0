@@ -65,6 +65,7 @@ backend/documents/*.pdf
 
 # HTML test files
 *.html
+!Helper2/index.html
 
 
 
