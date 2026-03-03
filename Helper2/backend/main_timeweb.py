@@ -33,6 +33,8 @@ elif public_key:
     logger.info("✅ YANDEX_DISK_PUBLIC_KEY установлен")
 
 # Импортируем модуль yandex_disk_api с обработкой ошибок
+# Делаем импорт безопасным, чтобы приложение могло запуститься даже при ошибках
+yandex_disk_api_available = False
 try:
     from yandex_disk_api import (
         get_folder_contents,
@@ -43,14 +45,15 @@ try:
         get_yandex_disk_public_key,
         get_yandex_disk_token
     )
+    yandex_disk_api_available = True
     logger.info("✅ Модуль yandex_disk_api успешно импортирован")
 except ImportError as e:
     logger.error(f"❌ Ошибка импорта yandex_disk_api: {e}")
     logger.error("Проверьте, что файл yandex_disk_api.py существует в директории backend")
-    raise
+    logger.warning("⚠️ Приложение запустится, но API Яндекс Диска будет недоступно")
 except Exception as e:
     logger.error(f"❌ Ошибка при загрузке модуля yandex_disk_api: {e}")
-    raise
+    logger.warning("⚠️ Приложение запустится, но API Яндекс Диска будет недоступно")
 
 app = FastAPI(title="Yandex Disk API Proxy")
 
@@ -107,6 +110,8 @@ async def get_yandex_disk_files(folder_path: Optional[str] = Query(None)):
     Returns:
         Список файлов и папок
     """
+    if not yandex_disk_api_available:
+        raise HTTPException(status_code=503, detail="Модуль yandex_disk_api недоступен. Проверьте логи приложения.")
     try:
         # Нормализуем путь: убираем префикс "disk:" если есть
         if folder_path and folder_path.startswith('disk:'):
@@ -168,6 +173,8 @@ async def get_download_link_endpoint(file_path: str = Query(...)):
     Returns:
         Ссылка для скачивания
     """
+    if not yandex_disk_api_available:
+        raise HTTPException(status_code=503, detail="Модуль yandex_disk_api недоступен. Проверьте логи приложения.")
     try:
         # Нормализуем путь: убираем префикс "disk:" если есть
         if file_path.startswith('disk:'):
@@ -193,6 +200,8 @@ async def view_file(file_path: str = Query(...)):
     Returns:
         Содержимое файла с правильными заголовками
     """
+    if not yandex_disk_api_available:
+        raise HTTPException(status_code=503, detail="Модуль yandex_disk_api недоступен. Проверьте логи приложения.")
     try:
         # Нормализуем путь: убираем префикс "disk:" если есть
         if file_path.startswith('disk:'):
