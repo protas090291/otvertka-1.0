@@ -2,77 +2,17 @@ import { useState, useEffect } from 'react'
 import { supabase, supabaseAdmin, Apartment, Drawing, Project } from '../lib/supabase'
 
 // Функция для определения типа квартиры и соответствующего плана
-const getApartmentTypeAndPlan = (apartmentNumber: string) => {
-  // Полный список всех квартир из таблицы
-  const allApartments = [
-    // Этаж 1
-    '101',
-    // Этаж 2
-    '201', '202', '203',
-    // Этаж 3
-    '301', '302', '303',
-    // Этаж 4
-    '401', '402', '403', '404',
-    // Этаж 5
-    '501', '502', '503', '504',
-    // Этаж 6
-    '601', '602', '603', '604',
-    // Этаж 7
-    '701', '702', '703', '704',
-    // Этаж 8
-    '801', '802', '803', '804',
-    // Этаж 9
-    '901', '902', '903', '904',
-    // Этаж 10
-    '1001', '1002', '1003', '1004',
-    // Этаж 11
-    '1101', '1102', '1103', '1104',
-    // Этаж 12
-    '1201', '1202', '1203', '1204',
-    // Этаж 13
-    '1301', '1302',
-    // Этаж 14
-    '1401'
-  ]
+const getApartmentTypeAndPlan = (apartmentNumber: string, building?: 'T' | 'U' | null) => {
+  // ВСЕ КВАРТИРЫ ИНДИВИДУАЛЬНЫЕ - каждая квартира использует свой собственный план
+  // Квартира 1201 ищет план T1201, квартира 401 ищет план T401 и т.д.
+  // Для корпуса У ищем файлы с префиксом У, для корпуса Т - с префиксом T
   
-  // Проверяем, есть ли квартира в списке
-  if (!allApartments.includes(apartmentNumber)) {
-    return {
-      type: 'unknown',
-      planApartment: apartmentNumber,
-      isTypical: false
-    }
-  }
-  
-  // Индивидуальные квартиры (имеют свои уникальные планы)
-  // Только те, для которых есть файлы в Storage
-  const individualApartments = ['404', '504', '704', '804', '1204'] // 403 и 603 теперь используются для типовых квартир
-  
-  if (individualApartments.includes(apartmentNumber)) {
-    return {
-      type: 'individual',
-      planApartment: apartmentNumber,
-      isTypical: false
-    }
-  }
-  
-  // Типовые квартиры - определяем по последней цифре
-  // Используем только те планы, которые есть в Storage
-  const typicalPlanMap: { [key: string]: string } = {
-    '1': '403', // Типовые квартиры 1 используют план 403 (есть в Storage) ✅
-    '2': '402', // Типовые квартиры 2 используют план 402 ✅
-    '3': '603', // Типовые квартиры 3 используют план 603 (есть в Storage) ✅
-    '4': '804'  // Типовые квартиры 4 используют план 804 (есть в Storage) ✅
-  }
-  
-  const lastDigit = apartmentNumber.slice(-1)
-  const planApartment = typicalPlanMap[lastDigit] || apartmentNumber
+  console.log('✅ Индивидуальная квартира:', { apartmentNumber, building, planApartment: apartmentNumber })
   
   return {
-    type: 'typical',
-    planApartment,
-    isTypical: true,
-    typicalGroup: lastDigit
+    type: 'individual',
+    planApartment: apartmentNumber, // Используем тот же номер квартиры для поиска плана
+    isTypical: false
   }
 }
 
@@ -163,7 +103,7 @@ export const useProjects = () => {
             description: 'Современный жилой комплекс с развитой инфраструктурой',
             address: 'ул. Вишневая, 15',
             status: 'construction' as const,
-            total_apartments: 46, // Общее количество квартир в проекте
+            total_apartments: 51, // Общее количество квартир в проекте
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }])
@@ -209,7 +149,7 @@ export const useProjects = () => {
           description: 'Современный жилой комплекс с развитой инфраструктурой',
           address: 'ул. Вишневая, 15',
           status: 'construction' as const,
-          total_apartments: 46, // Общее количество квартир в проекте
+          total_apartments: 51, // Общее количество квартир в проекте
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }))
@@ -222,7 +162,7 @@ export const useProjects = () => {
             description: 'Современный жилой комплекс с развитой инфраструктурой',
             address: 'ул. Вишневая, 15',
             status: 'construction' as const,
-            total_apartments: 46, // Общее количество квартир в проекте
+            total_apartments: 51, // Общее количество квартир в проекте
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
@@ -239,7 +179,7 @@ export const useProjects = () => {
           description: 'Современный жилой комплекс с развитой инфраструктурой',
           address: 'ул. Вишневая, 15',
           status: 'construction' as const,
-          total_apartments: 46,
+          total_apartments: 51,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }])
@@ -443,7 +383,7 @@ export const useApartments = (projectId: string) => {
 }
 
 // Хук для получения архитектурных планов квартиры из Storage
-export const useArchitecturalPlans = (apartmentId: string) => {
+export const useArchitecturalPlans = (apartmentId: string, building?: 'T' | 'U' | null) => {
   const [plans, setPlans] = useState<Drawing[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -462,11 +402,25 @@ export const useArchitecturalPlans = (apartmentId: string) => {
         setLoading(true)
         setError(null)
         
-        // Извлекаем номер квартиры из apartmentId (например, apartment-1003 -> 1003)
-        const apartmentNumber = apartmentId.replace('apartment-', '')
-        const { type, planApartment, isTypical, typicalGroup } = getApartmentTypeAndPlan(apartmentNumber)
+        // Извлекаем номер квартиры из apartmentId (например, apartment-1003 -> 1003 или apartment-501-building-U -> 501)
+        let apartmentNumber = apartmentId.replace('apartment-', '').replace('-building-U', '')
         
-        console.log(`🏠 Квартира ${apartmentNumber}:`, { type, planApartment, isTypical, typicalGroup })
+        // Отладочное логирование
+        console.log('🔍 ОТЛАДКА извлечения номера:', { 
+          apartmentId, 
+          apartmentNumber, 
+          building,
+          afterReplace: apartmentId.replace('apartment-', '').replace('-building-U', '')
+        })
+        
+        const { type, planApartment, isTypical } = getApartmentTypeAndPlan(apartmentNumber, building)
+        
+        console.log(`🏠 Квартира ${apartmentNumber} (корпус ${building}):`, { 
+          type, 
+          planApartment, 
+          isTypical,
+          '⚠️ ВНИМАНИЕ': `Ищем файлы для плана ${planApartment}`
+        })
         
         // Получаем ВСЕ файлы из Storage bucket с пагинацией (важно: все страницы!)
         const allFilesData = await getAllFilesFromStorage('')
@@ -485,21 +439,105 @@ export const useArchitecturalPlans = (apartmentId: string) => {
         
         console.log(`🔍 Файлы из Storage для планов (все страницы): ${allFilesData.length} файлов`)
         
-        // Ищем файлы для квартиры-источника плана (planApartment)
+        // Отладочная информация: показываем первые 10 файлов
+        console.log('📋 Первые 10 файлов в Storage:', allFilesData.slice(0, 10).map(f => f.name))
+        
+        // Ищем файлы для квартиры-источника плана с учетом корпуса
+        // ВАЖНО: Нормализуем номера для сравнения (убираем ведущие нули)
+        const normalizeApartmentNum = (num: string): string => {
+          // Убираем ведущие нули, но сохраняем минимум 3 цифры для трехзначных номеров
+          // "0604" -> "604", "604" -> "604", "1001" -> "1001"
+          const numInt = parseInt(num, 10)
+          return numInt.toString()
+        }
+        
+        const normalizedPlanApartment = normalizeApartmentNum(planApartment)
+        
         const planFiles = allFilesData.filter(file => {
           const fileName = file.name
           
-          // Ищем файлы, которые содержат номер квартиры-источника
-          // Например, для квартиры 1003 (тип 3) ищем файлы с T603
+          // Для корпуса У ищем ТОЛЬКО файлы с префиксом У (кириллица) или U (латиница)
+          // ВАЖНО: НЕ показываем файлы корпуса Т для корпуса У!
+          if (building === 'U') {
+            // Сначала проверяем, что файл НЕ относится к корпусу Т
+            const isBuildingT = fileName.match(/T(\d+)/)
+            if (isBuildingT) {
+              console.log(`❌ Пропущен файл корпуса Т для корпуса У: ${fileName}`)
+              return false
+            }
+            
+            // Ищем файлы с префиксом У (кириллица) или U (латиница)
+            const planMatch = fileName.match(/[УU](\d+)/)
+            if (planMatch) {
+              const fileApartmentNum = normalizeApartmentNum(planMatch[1])
+              const matches = fileApartmentNum === normalizedPlanApartment
+              if (matches) {
+                console.log(`✅ Найден файл для У${planApartment} (нормализовано: ${normalizedPlanApartment}): ${fileName}`)
+              } else {
+                console.log(`⚠️ Файл корпуса У найден, но номер не совпадает: ${fileName}, ищем ${normalizedPlanApartment}, файл: ${fileApartmentNum}`)
+              }
+              return matches
+            }
+            
+            // Если не нашли файл корпуса У, не показываем ничего
+            console.log(`⚠️ Файл не относится к корпусу У: ${fileName}`)
+            return false
+          }
+          
+          // Для корпуса Т ищем файлы с префиксом T (исключаем файлы корпуса У)
           const planMatch = fileName.match(/T(\d+)/)
           if (planMatch) {
-            const fileApartmentNum = planMatch[1]
-            return fileApartmentNum === planApartment
+            const fileApartmentNum = normalizeApartmentNum(planMatch[1])
+            // Исключаем файлы корпуса У (если они есть с префиксом У)
+            const isBuildingU = fileName.match(/[УU](\d+)/)
+            if (isBuildingU) {
+              console.log(`❌ Пропущен файл корпуса У для корпуса Т: ${fileName}`)
+              return false
+            }
+            
+            const matches = fileApartmentNum === normalizedPlanApartment
+            if (matches) {
+              console.log(`✅ Найден файл для T${planApartment} (нормализовано: ${normalizedPlanApartment}): ${fileName}`)
+            } else {
+              // Отладочное логирование для несовпадений
+              if (fileName.includes('T') && fileName.includes(planApartment.slice(-3))) {
+                console.log(`⚠️ Частичное совпадение: файл ${fileName}, ищем ${planApartment} (нормализовано: ${normalizedPlanApartment}), файл нормализован: ${fileApartmentNum}`)
+              }
+            }
+            return matches
           }
           return false
         })
         
-        console.log(`📋 Файлы для плана квартиры ${planApartment}:`, planFiles.length, 'найдено')
+        console.log(`📋 Файлы для плана квартиры ${planApartment} (корпус ${building}):`, planFiles.length, 'найдено')
+        if (planFiles.length > 0) {
+          console.log('📄 Найденные файлы:', planFiles.map(f => f.name))
+        } else {
+          // Для корпуса У показываем только файлы корпуса У в отладке
+          if (building === 'U') {
+            const buildingUFiles = allFilesData.filter(f => /[УU](\d+)/.test(f.name))
+            console.warn(`⚠️ Файлы для квартиры У${planApartment} не найдены!`)
+            console.log(`📋 Всего файлов корпуса У в Storage: ${buildingUFiles.length}`)
+            if (buildingUFiles.length > 0) {
+              console.log('📄 Файлы корпуса У в Storage:', buildingUFiles.slice(0, 10).map(f => f.name))
+            }
+            // Проверяем, есть ли файлы корпуса Т с таким номером (не должны показываться)
+            const buildingTFiles = allFilesData.filter(f => {
+              const match = f.name.match(/T(\d+)/)
+              if (match) {
+                const fileNum = normalizeApartmentNum(match[1])
+                return fileNum === normalizedPlanApartment
+              }
+              return false
+            })
+            if (buildingTFiles.length > 0) {
+              console.error(`❌ ОШИБКА: Найдены файлы корпуса Т для корпуса У! Это не должно происходить:`, buildingTFiles.map(f => f.name))
+            }
+          } else {
+            console.warn(`⚠️ Файлы для квартиры T${planApartment} не найдены! Ищем среди:`, 
+              allFilesData.slice(0, 5).map(f => f.name))
+          }
+        }
         
         // Проверяем отмену ещё раз перед долгой операцией
         if (isCancelled) {
@@ -531,10 +569,9 @@ export const useArchitecturalPlans = (apartmentId: string) => {
                 created_at: file.created_at || new Date().toISOString(),
                 file_url: urlData.publicUrl, // Добавляем публичный URL
                 // Дополнительная информация о типе квартиры
-                apartment_type: type,
+                apartment_type: type as 'individual' | 'typical' | undefined,
                 plan_source_apartment: planApartment,
-                is_typical: isTypical,
-                typical_group: typicalGroup
+                is_typical: isTypical
               }
             })
         )
@@ -564,11 +601,11 @@ export const useArchitecturalPlans = (apartmentId: string) => {
 
     fetchPlans()
 
-    // Cleanup функция: отменяем запрос если apartmentId изменился
+    // Cleanup функция: отменяем запрос если apartmentId или building изменились
     return () => {
       isCancelled = true
     }
-  }, [apartmentId])
+  }, [apartmentId, building])
 
   return { plans, loading, error }
 }
@@ -581,7 +618,8 @@ export const usePlanUpload = () => {
   const uploadPlan = async (
     file: File,
     apartmentId: string,
-    planType: string
+    planType: string,
+    building?: 'T' | 'U' | null
   ): Promise<string | null> => {
     try {
       setUploading(true)
@@ -604,7 +642,7 @@ export const usePlanUpload = () => {
         .from('architectural-plans')
         .getPublicUrl(filePath)
 
-      // Сохраняем информацию о плане в базу данных
+      // Сохраняем информацию о плане в базу данных (включая building)
       const { data: planData, error: planError } = await supabase
         .from('architectural_plans')
         .insert({
@@ -612,7 +650,8 @@ export const usePlanUpload = () => {
           plan_type: planType,
           file_name: file.name,
           file_url: urlData.publicUrl,
-          file_size: file.size
+          file_size: file.size,
+          building: building || 'T' // Сохраняем корпус, по умолчанию Т
         })
         .select()
         .single()

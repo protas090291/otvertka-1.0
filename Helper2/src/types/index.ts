@@ -163,6 +163,7 @@ export interface SupabaseArchitecturalPlan {
   file_name: string;
   file_url: string;
   file_size: number;
+  building?: 'T' | 'U' | null; // Корпус: T - Корпус Т, U - Корпус У
   created_at: string;
   updated_at: string;
 }

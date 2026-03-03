@@ -24,7 +24,7 @@ interface SidebarProps {
 
 export const menuItems = {
   client: [
-    { id: 'dashboard', label: 'Дашборд', icon: Home },
+    { id: 'dashboard', label: 'Сводка', icon: Home },
     { id: 'projects', label: 'Проекты', icon: Building2 },
     { id: 'schedule', label: 'График', icon: Calendar },
     { id: 'budget', label: 'Бюджет', icon: DollarSign },
@@ -34,7 +34,7 @@ export const menuItems = {
     { id: 'yandex-disk', label: 'Яндекс Диск', icon: Cloud },
   ],
   foreman: [
-    { id: 'dashboard', label: 'Дашборд', icon: Home },
+    { id: 'dashboard', label: 'Сводка', icon: Home },
     { id: 'projects', label: 'Проекты', icon: Building2 },
     { id: 'schedule', label: 'График', icon: Calendar },
     { id: 'materials', label: 'Материалы', icon: Package },
@@ -44,7 +44,7 @@ export const menuItems = {
     { id: 'yandex-disk', label: 'Яндекс Диск', icon: Cloud },
   ],
   contractor: [
-    { id: 'dashboard', label: 'Дашборд', icon: Home },
+    { id: 'dashboard', label: 'Сводка', icon: Home },
     { id: 'projects', label: 'Проекты', icon: Building2 },
     { id: 'schedule', label: 'График', icon: Calendar },
     { id: 'budget', label: 'Бюджет', icon: DollarSign },
@@ -55,7 +55,7 @@ export const menuItems = {
     { id: 'yandex-disk', label: 'Яндекс Диск', icon: Cloud },
   ],
   worker: [
-    { id: 'dashboard', label: 'Дашборд', icon: Home },
+    { id: 'dashboard', label: 'Сводка', icon: Home },
     { id: 'schedule', label: 'Задачи', icon: Calendar },
     { id: 'materials', label: 'Материалы', icon: Package },
     { id: 'defects', label: 'Дефекты', icon: AlertTriangle },
@@ -64,14 +64,14 @@ export const menuItems = {
     { id: 'yandex-disk', label: 'Яндекс Диск', icon: Cloud },
   ],
   storekeeper: [
-    { id: 'dashboard', label: 'Дашборд', icon: Home },
+    { id: 'dashboard', label: 'Сводка', icon: Home },
     { id: 'projects', label: 'Проекты', icon: Building2 },
     { id: 'materials', label: 'Материалы', icon: Package },
     { id: 'reports', label: 'Отчёты', icon: FileText },
     { id: 'yandex-disk', label: 'Яндекс Диск', icon: Cloud },
   ],
   technadzor: [
-    { id: 'dashboard', label: 'Дашборд', icon: Home },
+    { id: 'dashboard', label: 'Сводка', icon: Home },
     { id: 'projects', label: 'Проекты', icon: Building2 },
     { id: 'schedule', label: 'Задачи', icon: Calendar },
     { id: 'defects', label: 'Дефекты', icon: AlertTriangle },

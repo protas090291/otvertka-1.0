@@ -8,6 +8,7 @@ import PlanWithMarks from './PlanWithMarks';
 import PlanWithSupabaseDefects from './PlanWithSupabaseDefects';
 import { useDefectsCount } from '../hooks/useDefectsCount';
 import { getAllDefects, updateDefectStatus, createDefect, getCurrentMode } from '../lib/hybridDefectsApi';
+import { getCurrentUser } from '../lib/authApi';
 import DefectStatusChanger from './DefectStatusChanger';
 
 interface DefectsViewProps {
@@ -522,6 +523,7 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
       
       // Закрытие формы создания
       setIsCreatingDefect(false);
+      
       
       // Показываем уведомление об успешном создании
       setShowNotification(true);
@@ -1095,11 +1097,11 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
             onChange={(e) => setSelectedFilter(e.target.value)}
             className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/30"
           >
-            <option value="all">Все статусы</option>
-            <option value="open">Открытые</option>
-            <option value="in-progress">В работе</option>
-            <option value="resolved">Решенные</option>
-            <option value="closed">Закрытые</option>
+            <option value="all" className="bg-slate-800 text-white">Все статусы</option>
+            <option value="open" className="bg-slate-800 text-white">Открытые</option>
+            <option value="in-progress" className="bg-slate-800 text-white">В работе</option>
+            <option value="resolved" className="bg-slate-800 text-white">Решенные</option>
+            <option value="closed" className="bg-slate-800 text-white">Закрытые</option>
           </select>
         </div>
       </div>
@@ -1199,26 +1201,6 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Сообщение о том, что дефекты из Supabase не загружены */}
-        {!loadingSupabaseDefects && supabaseDefects.length === 0 && defects.length === 0 && (
-          <div className="text-center py-12">
-            <AlertTriangle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-white mb-2">Дефекты не найдены</h3>
-            <p className="text-slate-400">
-              {userRole === 'client' 
-                ? 'Создайте первый дефект для подрядчика'
-                : userRole === 'contractor'
-                ? 'Создайте первый дефект для начала работы'
-                : userRole === 'foreman'
-                ? 'Ожидайте передачи дефектов от подрядчика'
-                : userRole === 'worker'
-                ? 'Ожидайте передачи дефектов от прораба'
-                : 'Ожидайте создания дефектов другими участниками'
-              }
-            </p>
           </div>
         )}
       </div>
@@ -1555,26 +1537,6 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
         })}
       </div>
 
-      {/* Сообщение о пустом списке дефектов - показываем только если действительно нет дефектов */}
-      {defects.length === 0 && supabaseDefects.length === 0 && !loadingSupabaseDefects && (
-        <div className="text-center py-12">
-          <AlertTriangle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Дефекты не найдены</h3>
-          <p className="text-gray-500">
-            {userRole === 'client' 
-              ? 'Создайте первый дефект для подрядчика'
-              : userRole === 'contractor'
-              ? 'Создайте первый дефект для начала работы'
-              : userRole === 'foreman'
-              ? 'Ожидайте передачи дефектов от подрядчика'
-              : userRole === 'worker'
-              ? 'Ожидайте передачи дефектов от прораба'
-              : 'Ожидайте создания дефектов другими участниками'
-            }
-          </p>
-        </div>
-      )}
-
       {/* Сообщение о том, что дефекты не соответствуют фильтрам */}
       {(defects.length > 0 || supabaseDefects.length > 0) && filteredDefects.filter(defect => {
         // Заказчик видит дефекты, которые он создал (включая переданные)
@@ -1848,16 +1810,16 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
         if (!defect) return null;
         
         return (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white/40 backdrop-blur-md rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-white/30 shadow-xl">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={handleCloseView}>
+            <div className="bg-slate-900 rounded-2xl border border-white/10 max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">Подробная информация о дефекте</h2>
-                                    <div className="flex items-center space-x-3">
+                  <h2 className="text-2xl font-bold text-white">Подробная информация о дефекте</h2>
+                  <div className="flex items-center space-x-3">
                     {(userRole === 'foreman' || userRole === 'contractor' || userRole === 'technadzor') && defect.status === 'in-progress' && (
                       <button 
                         onClick={() => handleMarkAsResolved(defect.id)}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center space-x-2"
                       >
                         <CheckCircle className="w-4 h-4" />
                         <span>Решен</span>
@@ -1874,7 +1836,7 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
                     )}
                     <button 
                       onClick={handleCloseView}
-                      className="text-slate-400 hover:text-slate-400 transition-colors"
+                      className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                     >
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1885,25 +1847,25 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
 
                 <div className="space-y-6">
                   {/* Основная информация */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{defect.title}</h3>
+                  <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-white mb-3">{defect.title}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm text-slate-400 mb-2">Описание:</p>
-                        <p className="text-gray-900">{defect.description}</p>
+                        <p className="text-white">{defect.description}</p>
                       </div>
                       <div>
                         <p className="text-sm text-slate-400 mb-2">Местоположение:</p>
-                        <p className="text-gray-900">{defect.location}</p>
+                        <p className="text-white">{defect.location}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Статус и метаданные */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-white/60 backdrop-blur-sm border border-white/40 rounded-xl p-4">
-                      <h4 className="font-medium text-gray-900 mb-2">Статус</h4>
-                                             <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[defect.status]}`}>
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                      <h4 className="font-medium text-white mb-2">Статус</h4>
+                      <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[defect.status]}`}>
                          {(() => {
                            const StatusIcon = statusIcons[defect.status];
                            return <StatusIcon className="w-4 h-4 mr-1" />;
@@ -1913,67 +1875,67 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
                          defect.status === 'resolved' ? 'Решен' : 'Закрыт'}
                       </div>
                     </div>
-                    <div className="bg-white/60 backdrop-blur-sm border border-white/40 rounded-xl p-4">
-                      <h4 className="font-medium text-gray-900 mb-2">Важность</h4>
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                      <h4 className="font-medium text-white mb-2">Важность</h4>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${severityColors[defect.severity]}`}>
                         {defect.severity === 'low' ? 'Низкая' :
                          defect.severity === 'medium' ? 'Средняя' :
                          defect.severity === 'high' ? 'Высокая' : 'Критическая'}
                       </span>
                     </div>
-                    <div className="bg-white/60 backdrop-blur-sm border border-white/40 rounded-xl p-4">
-                      <h4 className="font-medium text-gray-900 mb-2">Категория</h4>
-                      <span className="text-sm text-gray-900">{categoryLabels[defect.category]}</span>
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                      <h4 className="font-medium text-white mb-2">Категория</h4>
+                      <span className="text-sm text-white">{categoryLabels[defect.category]}</span>
                     </div>
                   </div>
 
                   {/* Детальная информация */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-white/60 backdrop-blur-sm border border-white/40 rounded-xl p-4">
-                      <h4 className="font-medium text-gray-900 mb-3">Информация о дефекте</h4>
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                      <h4 className="font-medium text-white mb-3">Информация о дефекте</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-slate-400">Заявитель:</span>
-                          <span className="text-gray-900">{defect.reportedBy}</span>
+                          <span className="text-white">{defect.reportedBy}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-slate-400">Дата заявления:</span>
-                          <span className="text-gray-900">{new Date(defect.reportedDate).toLocaleDateString('ru')}</span>
+                          <span className="text-white">{new Date(defect.reportedDate).toLocaleDateString('ru')}</span>
                         </div>
                         {defect.assignedTo && (
                           <div className="flex justify-between">
                             <span className="text-slate-400">Исполнитель:</span>
-                            <span className="text-gray-900">{defect.assignedTo}</span>
+                            <span className="text-white">{defect.assignedTo}</span>
                           </div>
                         )}
                         {defect.dueDate && (
                           <div className="flex justify-between">
                             <span className="text-slate-400">Срок выполнения:</span>
-                            <span className="text-gray-900">{new Date(defect.dueDate).toLocaleDateString('ru')}</span>
+                            <span className="text-white">{new Date(defect.dueDate).toLocaleDateString('ru')}</span>
                           </div>
                         )}
                         {defect.resolvedDate && (
                           <div className="flex justify-between">
                             <span className="text-slate-400">Дата решения:</span>
-                            <span className="text-gray-900">{new Date(defect.resolvedDate).toLocaleDateString('ru')}</span>
+                            <span className="text-white">{new Date(defect.resolvedDate).toLocaleDateString('ru')}</span>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    <div className="bg-white/60 backdrop-blur-sm border border-white/40 rounded-xl p-4">
-                      <h4 className="font-medium text-gray-900 mb-3">Финансовая информация</h4>
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                      <h4 className="font-medium text-white mb-3">Финансовая информация</h4>
                       <div className="space-y-2 text-sm">
                         {defect.estimatedCost && (
                           <div className="flex justify-between">
                             <span className="text-slate-400">Ориентировочная стоимость:</span>
-                            <span className="text-gray-900">₽{defect.estimatedCost.toLocaleString()}</span>
+                            <span className="text-white">₽{defect.estimatedCost.toLocaleString()}</span>
                           </div>
                         )}
                         {defect.actualCost && (
                           <div className="flex justify-between">
                             <span className="text-slate-400">Фактическая стоимость:</span>
-                            <span className="text-gray-900">₽{defect.actualCost.toLocaleString()}</span>
+                            <span className="text-white">₽{defect.actualCost.toLocaleString()}</span>
                           </div>
                         )}
                       </div>
@@ -1982,18 +1944,18 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
 
                   {/* Медиа файлы */}
                   {(defect.photos.length > 0 || defect.videos.length > 0) && (
-                    <div className="bg-white/60 backdrop-blur-sm border border-white/40 rounded-xl p-4">
-                      <h4 className="font-medium text-gray-900 mb-3">Медиа файлы</h4>
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                      <h4 className="font-medium text-white mb-3">Медиа файлы</h4>
                       <div className="space-y-4">
                         {defect.photos.length > 0 && (
                           <div>
-                            <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                            <h5 className="text-sm font-medium text-slate-300 mb-2 flex items-center">
                               <Camera className="w-4 h-4 mr-1" />
                               Фотографии ({defect.photos.length})
                             </h5>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                               {defect.photos.map((photo, index) => (
-                                <div key={index} className="aspect-square bg-gray-200 rounded-lg overflow-hidden">
+                                <div key={index} className="aspect-square bg-white/5 border border-white/10 rounded-lg overflow-hidden">
                                   {photo.startsWith('data:') ? (
                                     <img 
                                       src={photo} 
@@ -2012,13 +1974,13 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
                         )}
                         {defect.videos.length > 0 && (
                           <div>
-                            <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                            <h5 className="text-sm font-medium text-slate-300 mb-2 flex items-center">
                               <Video className="w-4 h-4 mr-1" />
                               Видео ({defect.videos.length})
                             </h5>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                               {defect.videos.map((_, index) => (
-                                <div key={index} className="aspect-video bg-gray-200 rounded-lg flex items-center justify-center">
+                                <div key={index} className="aspect-video bg-white/5 border border-white/10 rounded-lg flex items-center justify-center">
                                   <Video className="w-8 h-8 text-slate-400" />
                                 </div>
                               ))}
@@ -2031,23 +1993,23 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
 
                   {/* Комментарии */}
                   {defect.comments.length > 0 && (
-                    <div className="bg-white/60 backdrop-blur-sm border border-white/40 rounded-xl p-4">
-                      <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                      <h4 className="font-medium text-white mb-3 flex items-center">
                         <MessageSquare className="w-4 h-4 mr-1" />
                         Комментарии ({defect.comments.length})
                       </h4>
                       <div className="space-y-3">
                         {defect.comments.map((comment) => (
-                          <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
+                          <div key={comment.id} className="bg-white/5 border border-white/10 rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium text-gray-900">{comment.author}</span>
-                              <span className="text-xs text-gray-500">{new Date(comment.date).toLocaleDateString('ru')}</span>
+                              <span className="text-sm font-medium text-white">{comment.author}</span>
+                              <span className="text-xs text-slate-400">{new Date(comment.date).toLocaleDateString('ru')}</span>
                             </div>
-                            <p className="text-sm text-slate-400 mb-2">{comment.text}</p>
+                            <p className="text-sm text-slate-300 mb-2">{comment.text}</p>
                             {comment.photos && comment.photos.length > 0 && (
                               <div className="flex space-x-2 overflow-x-auto">
                                 {comment.photos.map((photo, index) => (
-                                  <div key={index} className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                  <div key={index} className="w-16 h-16 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                                     {photo.startsWith('data:') ? (
                                       <img 
                                         src={photo} 
@@ -2075,49 +2037,49 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
 
       {/* Форма редактирования дефекта для технадзора */}
       {editingDefect && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Управление дефектом прораба</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl border border-white/10 max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Управление дефектом прораба</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Статус</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Статус</label>
                 <select 
                   value={editForm.status}
                   onChange={(e) => setEditForm({...editForm, status: e.target.value as any})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
                 >
-                  <option value="open">Открыт</option>
-                  <option value="in-progress">В работе</option>
-                  <option value="resolved">Решен</option>
-                  <option value="closed">Закрыт</option>
+                  <option value="open" className="bg-slate-800">Открыт</option>
+                  <option value="in-progress" className="bg-slate-800">В работе</option>
+                  <option value="resolved" className="bg-slate-800">Решен</option>
+                  <option value="closed" className="bg-slate-800">Закрыт</option>
                 </select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Назначить прорабу</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Назначить прорабу</label>
                 <select 
                   value={editForm.assignedTo}
                   onChange={(e) => setEditForm({...editForm, assignedTo: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
                 >
-                  <option value="">Выберите прораба</option>
-                  <option value="Прораб Иванов">Прораб Иванов</option>
-                  <option value="Прораб Петров">Прораб Петров</option>
-                  <option value="Прораб Сидоров">Прораб Сидоров</option>
+                  <option value="" className="bg-slate-800">Выберите прораба</option>
+                  <option value="Прораб Иванов" className="bg-slate-800">Прораб Иванов</option>
+                  <option value="Прораб Петров" className="bg-slate-800">Прораб Петров</option>
+                  <option value="Прораб Сидоров" className="bg-slate-800">Прораб Сидоров</option>
                 </select>
               </div>
               
               <div className="flex space-x-2 pt-4">
                 <button 
                   onClick={handleSaveEditDefect}
-                  className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium"
                 >
                   Сохранить
                 </button>
                 <button 
                   onClick={handleCancelEditDefect}
-                  className="flex-1 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                  className="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors font-medium"
                 >
                   Отмена
                 </button>
@@ -2467,26 +2429,26 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
 
       {/* Модальное окно отказа от дефекта */}
       {rejectingDefect && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Отказ от дефекта</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl border border-white/10 max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Отказ от дефекта</h2>
             
             <div className="space-y-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                <p className="text-sm text-red-800">
+              <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3 mb-4">
+                <p className="text-sm text-red-300">
                   <strong>Внимание!</strong><br/>
                   При отказе от дефекта он будет закрыт и снят с назначения. Заказчик будет уведомлен о причине отказа.
                 </p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Причина отказа *</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Причина отказа *</label>
                 <textarea
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                   placeholder="Укажите причину отказа от дефекта..."
                   rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 resize-none"
+                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 resize-none transition-all"
                 />
               </div>
             </div>
@@ -2495,17 +2457,17 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
               <button 
                 disabled={!rejectReason.trim()}
                 onClick={handleRejectDefect}
-                className={`flex-1 py-2 rounded-lg transition-colors ${
+                className={`flex-1 py-2.5 rounded-lg transition-colors font-medium ${
                   rejectReason.trim()
                     ? 'bg-red-600 hover:bg-red-700 text-white' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                 }`}
               >
                 Отказаться
               </button>
               <button 
                 onClick={handleCancelRejectDefect}
-                className="flex-1 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                className="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors font-medium"
               >
                 Отмена
               </button>
@@ -2516,11 +2478,11 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
 
       {/* Модальное окно просмотра плана квартиры */}
       {showPlanViewer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl border border-white/10 max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-xl font-bold text-white">
                   План квартиры {selectedApartmentForPlan}
                 </h2>
                 {selectedDefectForPlan && (
@@ -2533,14 +2495,14 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
                 {selectedDefectForPlan && (
                   <button
                     onClick={handleClosePlanViewer}
-                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors text-sm"
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm font-medium"
                   >
                     Закрыть
                   </button>
                 )}
                 <button
                   onClick={handleClosePlanViewer}
-                  className="text-slate-400 hover:text-slate-400 transition-colors"
+                  className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                 >
                   ✕
                 </button>

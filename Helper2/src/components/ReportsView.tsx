@@ -596,7 +596,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ userRole }) => {
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>{userRole === 'foreman' ? 'Отчёт для подрядчика' : userRole === 'worker' ? 'Отчёт для прораба' : 'Создать отчёт'}</span>
+                    <span>Создать отчёт</span>
                   </button>
                 )}
                 {userRole === 'storekeeper' && (
@@ -614,7 +614,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ userRole }) => {
                     className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Отчёт для подрядчика</span>
+                    <span>Создать отчёт</span>
                   </button>
                 )}
                 {userRole === 'contractor' && (

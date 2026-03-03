@@ -52,16 +52,16 @@ const ProjectsViewWithAPI: React.FC<ProjectsViewWithAPIProps> = ({ userRole, onN
                name.includes('вишнёвый сад');
       });
       
-      // Статические данные для проекта "Вишневый сад" (синхронизированы с дашбордом)
+      // Статические данные для проекта "Вишневый сад" (синхронизированы со сводкой)
       const staticVishnevyySad = {
         id: 'zhk-vishnevyy-sad',
         name: 'ЖК "Вишневый сад"',
         status: 'in-progress',
-        progress: 65, // Синхронизировано с дашбордом
-        startDate: '2025-06-20', // Синхронизировано с дашбордом
-        endDate: '2026-06-20', // Синхронизировано с дашбордом
-        budget: 180000000, // Синхронизировано с дашбордом
-        spent: 117000000, // Синхронизировано с дашбордом
+        progress: 65, // Синхронизировано со сводкой
+        startDate: '2025-06-20', // Синхронизировано со сводкой
+        endDate: '2026-06-20', // Синхронизировано со сводкой
+        budget: 180000000, // Синхронизировано со сводкой
+        spent: 117000000, // Синхронизировано со сводкой
         client: 'ООО "АБ ДЕВЕЛОПМЕНТ ЦЕНТР"',
         foreman: 'Саидов Ю.Н.',
         contractor: 'ООО "СтройМонтаж"',
@@ -304,11 +304,11 @@ const ProjectsViewWithAPI: React.FC<ProjectsViewWithAPIProps> = ({ userRole, onN
               onChange={(e) => setStatusFilter(e.target.value)}
               className={`${inputClass} px-3 py-2`}
             >
-              <option value="all">Все статусы</option>
-              <option value="planning">Планирование</option>
-              <option value="in-progress">В работе</option>
-              <option value="completed">Завершён</option>
-              <option value="on-hold">Приостановлен</option>
+              <option value="all" className="bg-slate-800 text-white">Все статусы</option>
+              <option value="planning" className="bg-slate-800 text-white">Планирование</option>
+              <option value="in-progress" className="bg-slate-800 text-white">В работе</option>
+              <option value="completed" className="bg-slate-800 text-white">Завершён</option>
+              <option value="on-hold" className="bg-slate-800 text-white">Приостановлен</option>
             </select>
           </div>
         </div>

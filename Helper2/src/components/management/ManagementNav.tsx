@@ -45,10 +45,6 @@ const ManagementNav: React.FC<ManagementNavProps> = ({
             );
           })}
         </div>
-        <div className="hidden items-center gap-2 md:flex">
-          <div className="h-1 w-1 rounded-full bg-blue-400" />
-          <span className="text-xs uppercase tracking-[0.4em] text-slate-400">live</span>
-        </div>
       </div>
 
       {currentView === 'accounting' && (

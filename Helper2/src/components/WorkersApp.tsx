@@ -125,7 +125,7 @@ const WorkersApp: React.FC<WorkersAppProps> = ({ onExit }) => {
         <div className="absolute top-40 right-0 h-72 w-72 rounded-full bg-purple-500/10 blur-[140px]" />
       </div>
       <div className="relative z-10">
-        <ManagementHeader badge="РАБОЧИЙ МОДУЛЬ" onLogout={handleLogout} />
+        <ManagementHeader badge="РАБОЧИЙ МОДУЛЬ" onLogout={handleLogout} currentUserId={currentUser?.id || null} />
         <DarkAppNav
           items={navItems}
           currentView={navHighlightView}

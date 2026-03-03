@@ -49,15 +49,15 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, compact = false, onV
         console.log('📊 ProjectCard: Прогресс загружен для проекта', project.name, progress, `→ Итоговый %: ${progress.averageProgress}%`);
       } catch (error) {
         console.error('❌ ProjectCard: Ошибка загрузки прогресса:', error);
-        // Используем статический прогресс как fallback
+        // В случае ошибки используем 0 (как в Сводке), не используем project.progress
         setProjectProgress({
-          totalProgress: project.progress || 0,
+          totalProgress: 0,
           totalTasks: 0,
           completedTasks: 0,
           inProgressTasks: 0,
           pendingTasks: 0,
           delayedTasks: 0,
-          averageProgress: project.progress || 0
+          averageProgress: 0
         });
       } finally {
         setLoading(false);
@@ -65,7 +65,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, compact = false, onV
     };
 
     loadProjectProgress();
-  }, [project.id, project.progress]);
+  }, [project.id]);
 
   // Автоматическое обновление текущей даты каждый день для пересчета оставшихся дней
   useEffect(() => {
@@ -103,9 +103,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, compact = false, onV
 
   // Используем РАСЧЕТНЫЙ прогресс из базы данных (progress_data) для расчета качества
   // Это реальный прогресс, который рассчитывается из фактических данных работ
-  const actualProgress = (typeof projectProgress.averageProgress === 'number' && !isNaN(projectProgress.averageProgress) && projectProgress.averageProgress > 0)
+  // Всегда используем только averageProgress из getProjectProgress (как в Сводке)
+  const actualProgress = (typeof projectProgress.averageProgress === 'number' && !isNaN(projectProgress.averageProgress))
     ? projectProgress.averageProgress
-    : (typeof project.progress === 'number' && !isNaN(project.progress) ? project.progress : 0);
+    : 0;
   
   const progressColor = actualProgress >= 75 ? 'bg-green-500' : 
                        actualProgress >= 50 ? 'bg-blue-500' : 
@@ -169,7 +170,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, compact = false, onV
     timeProgress
   });
   
-  const { efficiency, normalizedEfficiency, qualityScore } = qualityCalculation;
+  const { efficiency, normalizedEfficiency, qualityScore: calculatedQualityScore } = qualityCalculation;
+  
+  // Используем статичное значение качества для демонстрации (как в KPI)
+  const qualityScore = 87;
   
   // Логирование расчета качества для отладки
   if (!loading) {

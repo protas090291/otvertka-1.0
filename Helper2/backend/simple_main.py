@@ -48,10 +48,18 @@ except ImportError as e:
         PDF_AI_AVAILABLE = True
         USE_PADDLEOCR = False
         logger.info("✅ Используется упрощенный PDF процессор (без PaddleOCR)")
-    except ImportError as e2:
-        logger.warning(f"Упрощенный PDF процессор также не доступен: {e2}")
+
 import tempfile
 import shutil
+
+# Импорт анализатора таблиц прогресса
+try:
+    from progress_table_analyzer import analyze_progress_table
+    PROGRESS_ANALYZER_AVAILABLE = True
+except ImportError as e:
+    PROGRESS_ANALYZER_AVAILABLE = False
+    # logger будет определен позже
+    pass
 
 # Импорт PDF AI процессора
 try:
@@ -64,6 +72,10 @@ except ImportError as e:
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Логируем статус анализатора таблиц прогресса
+if not PROGRESS_ANALYZER_AVAILABLE:
+    logger.warning("Анализатор таблиц прогресса не доступен. Установите зависимости: pip install requests pillow")
 
 # In-memory хранилище для демонстрации
 commands_storage = []
@@ -1078,6 +1090,93 @@ async def pdf_ai_health():
         },
         'message': 'PDF AI processor готов к работе' if PDF_AI_AVAILABLE else 'PDF AI processor не установлен'
     }
+
+
+# ============================================
+# API для анализа таблиц прогресса работ
+# ============================================
+
+class ProgressTableAnalysisRequest(BaseModel):
+    image: str = Field(..., description="Base64 строка изображения таблицы прогресса")
+
+
+@app.post("/api/progress/analyze-table")
+async def analyze_progress_table_endpoint(request: ProgressTableAnalysisRequest):
+    """
+    Анализирует изображение таблицы прогресса и извлекает данные о работах и процентах выполнения
+    
+    Args:
+        request: Запрос с base64 изображением таблицы
+    
+    Returns:
+        Результаты анализа с извлеченными данными
+    """
+    if not PROGRESS_ANALYZER_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Анализатор таблиц прогресса не доступен. Проверьте установку зависимостей."
+        )
+    
+    try:
+        logger.info("Начало анализа таблицы прогресса...")
+        results = analyze_progress_table(request.image)
+        
+        logger.info(f"✅ Анализ завершен. Извлечено {len(results)} записей")
+        
+        return {
+            "success": True,
+            "results": results,
+            "count": len(results),
+            "message": f"Успешно извлечено {len(results)} записей из таблицы"
+        }
+    
+    except Exception as e:
+        logger.error(f"Ошибка анализа таблицы прогресса: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка анализа таблицы: {str(e)}")
+
+
+@app.post("/api/progress/analyze-table-file")
+async def analyze_progress_table_file(file: UploadFile = File(...)):
+    """
+    Анализирует загруженный файл изображения таблицы прогресса
+    
+    Args:
+        file: Загруженный файл изображения
+    
+    Returns:
+        Результаты анализа с извлеченными данными
+    """
+    if not PROGRESS_ANALYZER_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Анализатор таблиц прогресса не доступен. Проверьте установку зависимостей."
+        )
+    
+    # Проверяем тип файла
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="Файл должен быть изображением")
+    
+    try:
+        # Читаем файл и конвертируем в base64
+        image_bytes = await file.read()
+        import base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        logger.info(f"Начало анализа таблицы прогресса из файла {file.filename}...")
+        results = analyze_progress_table(image_base64)
+        
+        logger.info(f"✅ Анализ завершен. Извлечено {len(results)} записей")
+        
+        return {
+            "success": True,
+            "results": results,
+            "count": len(results),
+            "message": f"Успешно извлечено {len(results)} записей из таблицы"
+        }
+    
+    except Exception as e:
+        logger.error(f"Ошибка анализа таблицы прогресса: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка анализа таблицы: {str(e)}")
 
 
 if __name__ == "__main__":

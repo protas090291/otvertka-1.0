@@ -113,37 +113,45 @@ function App() {
     return <Login onLogin={handleLogin} />;
   }
 
-  switch (currentView) {
-    case 'login':
-      return <Login onLogin={handleLogin} />;
-    
-    case 'module-selector':
-      if (!currentUser) {
+  const renderView = () => {
+    switch (currentView) {
+      case 'login':
         return <Login onLogin={handleLogin} />;
-      }
-      return <ModuleSelector onSelectModule={handleSelectModule} />;
-    
-    case 'workers':
-      if (!currentUser) {
+      
+      case 'module-selector':
+        if (!currentUser) {
+          return <Login onLogin={handleLogin} />;
+        }
+        return <ModuleSelector onSelectModule={handleSelectModule} />;
+      
+      case 'workers':
+        if (!currentUser) {
+          return <Login onLogin={handleLogin} />;
+        }
+        return <WorkersApp onExit={handleExitToModuleSelector} />;
+      
+      case 'management':
+        if (!currentUser) {
+          return <Login onLogin={handleLogin} />;
+        }
+        return <ManagementApp onLogout={handleExitToModuleSelector} />;
+      
+      case 'admin':
+        if (!currentUser) {
+          return <Login onLogin={handleLogin} />;
+        }
+        return <AdminApp onExit={handleExitToModuleSelector} />;
+      
+      default:
         return <Login onLogin={handleLogin} />;
-      }
-      return <WorkersApp onExit={handleExitToModuleSelector} />;
-    
-    case 'management':
-      if (!currentUser) {
-        return <Login onLogin={handleLogin} />;
-      }
-      return <ManagementApp onLogout={handleExitToModuleSelector} />;
-    
-    case 'admin':
-      if (!currentUser) {
-        return <Login onLogin={handleLogin} />;
-      }
-      return <AdminApp onExit={handleExitToModuleSelector} />;
-    
-    default:
-      return <Login onLogin={handleLogin} />;
-  }
+    }
+  };
+
+  return (
+    <>
+      {renderView()}
+    </>
+  );
 }
 
 export default App;

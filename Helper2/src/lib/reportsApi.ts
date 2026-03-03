@@ -4,7 +4,7 @@ import { supabase } from './supabase';
 export interface Report {
   id: string;
   title: string;
-  type: 'work_report' | 'defect_report' | 'progress_report' | 'quality_report' | 'handover_act';
+  type: 'daily' | 'weekly' | 'milestone' | 'warehouse' | 'technadzor' | 'contractor'; // Типы, разрешённые в базе данных
   project_id: string;
   apartment_id?: string;
   description: string;
@@ -17,11 +17,12 @@ export interface Report {
   approved_by?: string;
   approved_at?: string;
   notes?: string;
+  author?: string; // Имя автора
 }
 
 export interface ReportInput {
   title: string;
-  type: 'work_report' | 'defect_report' | 'progress_report' | 'quality_report' | 'handover_act';
+  type: 'daily' | 'weekly' | 'milestone' | 'warehouse' | 'technadzor' | 'contractor'; // Типы, разрешённые в базе данных
   project_id: string;
   apartment_id?: string;
   description: string;
@@ -29,11 +30,13 @@ export interface ReportInput {
   photos?: string[];
   status?: 'draft' | 'pending' | 'approved' | 'rejected';
   notes?: string;
+  created_by?: string; // ID пользователя, создавшего отчёт
+  author?: string; // Имя автора (обязательное поле в базе данных)
 }
 
 export interface ReportUpdate {
   title?: string;
-  type?: 'work_report' | 'defect_report' | 'progress_report' | 'quality_report' | 'handover_act';
+  type?: 'daily' | 'weekly' | 'milestone' | 'warehouse' | 'technadzor' | 'contractor';
   project_id?: string;
   apartment_id?: string;
   description?: string;
@@ -43,6 +46,7 @@ export interface ReportUpdate {
   notes?: string;
   approved_by?: string;
   approved_at?: string;
+  author?: string;
 }
 
 export interface ReportStats {
@@ -224,6 +228,8 @@ export const searchReports = async (searchTerm: string): Promise<Report[]> => {
  */
 export const createReport = async (report: ReportInput): Promise<Report | null> => {
   try {
+    console.log('createReport вызван с данными:', report);
+    
     const { data, error } = await supabase
       .from('reports')
       .insert([{
@@ -236,13 +242,21 @@ export const createReport = async (report: ReportInput): Promise<Report | null> 
 
     if (error) {
       console.error('Ошибка создания отчета:', error);
+      console.error('Детали ошибки:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
       throw error;
     }
 
+    console.log('Отчёт успешно создан:', data);
     return data;
   } catch (error) {
     console.error('Ошибка в createReport:', error);
-    return null;
+    // Пробрасываем ошибку дальше, чтобы компонент мог её обработать
+    throw error;
   }
 };
 

@@ -396,22 +396,22 @@ const MaterialsViewWithAPI: React.FC<MaterialsViewProps> = ({ userRole }) => {
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="px-3 py-2 border border-white/10 rounded-xl bg-white/5 text-white focus:ring-2 focus:ring-blue-500/50"
             >
-              <option value="all">Все категории</option>
-              <option value="materials">Материалы</option>
-              <option value="tools">Инструменты</option>
-              <option value="equipment">Оборудование</option>
-              <option value="consumables">Расходники</option>
+              <option value="all" className="bg-slate-800 text-white">Все категории</option>
+              <option value="materials" className="bg-slate-800 text-white">Материалы</option>
+              <option value="tools" className="bg-slate-800 text-white">Инструменты</option>
+              <option value="equipment" className="bg-slate-800 text-white">Оборудование</option>
+              <option value="consumables" className="bg-slate-800 text-white">Расходники</option>
             </select>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3 py-2 border border-white/10 rounded-xl bg-white/5 text-white focus:ring-2 focus:ring-blue-500/50"
             >
-              <option value="all">Все статусы</option>
-              <option value="in-stock">В наличии</option>
-              <option value="low-stock">Заканчивается</option>
-              <option value="out-of-stock">Нет в наличии</option>
-              <option value="reserved">Зарезервировано</option>
+              <option value="all" className="bg-slate-800 text-white">Все статусы</option>
+              <option value="in-stock" className="bg-slate-800 text-white">В наличии</option>
+              <option value="low-stock" className="bg-slate-800 text-white">Заканчивается</option>
+              <option value="out-of-stock" className="bg-slate-800 text-white">Нет в наличии</option>
+              <option value="reserved" className="bg-slate-800 text-white">Зарезервировано</option>
             </select>
           </div>
         </div>

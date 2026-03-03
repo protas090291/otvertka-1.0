@@ -191,7 +191,7 @@ const getQuickActions = (userRole: UserRole, onNavigate?: (view: string) => void
         icon: AlertTriangle,
         bgColor: 'bg-red-100',
         iconColor: 'text-red-600',
-        onClick: () => navigate('defects')
+        onClick: () => navigate('architectural-plans')
       },
       {
         label: 'Создать отчет',
@@ -223,6 +223,32 @@ const getQuickActions = (userRole: UserRole, onNavigate?: (view: string) => void
 const Dashboard: React.FC<DashboardProps> = ({ userRole, onNavigate }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
+  const [projectProgress, setProjectProgress] = useState<number>(0);
+  const [projectKPIs, setProjectKPIs] = useState<any>(null);
+
+  // Загружаем прогресс проекта
+  useEffect(() => {
+    const loadProgress = async () => {
+      try {
+        const { getProjectProgress } = await import('../lib/tasksApi');
+        const progressData = await getProjectProgress('zhk-vishnevyy-sad');
+        setProjectProgress(progressData.averageProgress || 0);
+        
+        // Также загружаем KPI для дополнительных данных
+        try {
+          const { getProjectKPIs } = await import('../lib/projectsApi');
+          const kpis = await getProjectKPIs();
+          setProjectKPIs(kpis);
+        } catch (kpiError) {
+          console.error('Ошибка загрузки KPI:', kpiError);
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки прогресса проекта:', error);
+        // В случае ошибки оставляем 0 или можно использовать fallback значение
+      }
+    };
+    loadProgress();
+  }, []);
 
   // Загружаем последние обновления
   useEffect(() => {
@@ -282,7 +308,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userRole, onNavigate }) => {
     client: [
       { title: 'Активные проекты', value: '1', icon: Building2, color: 'blue' },
       { title: 'Прогресс времени', value: '45%', icon: Calendar, color: 'green' },
-      { title: 'Завершение', value: '65%', icon: TrendingUp, color: 'orange' },
+      { title: 'Завершение', value: `${projectProgress}%`, icon: TrendingUp, color: 'orange' },
       { title: 'Дней до дедлайна', value: '365', icon: Clock, color: 'red' },
     ],
     foreman: [
@@ -321,7 +347,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userRole, onNavigate }) => {
     {
       id: 'zhk-vishnevyy-sad',
       name: 'ЖК "Вишневый сад"',
-      progress: 65,
+      progress: projectProgress,
       status: 'in-progress' as const,
       dueDate: '2026-06-20',
       budget: 180000000,

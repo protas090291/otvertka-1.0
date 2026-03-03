@@ -106,41 +106,131 @@ def get_folder_contents(folder_path: Optional[str] = None) -> List[Dict[str, Any
     Получить список файлов и папок из указанной папки на Яндекс Диске
     Поддерживает как обычные папки (с OAuth токеном), так и публичные папки (без токена)
     
+    Приоритет: OAuth токен для доступа к корню, затем публичный ключ для конкретной папки
+    
     Args:
-        folder_path: Путь к папке на Яндекс Диске (если None, используется из env)
+        folder_path: Путь к папке на Яндекс Диске (если None или '/', используется корень)
     
     Returns:
         Список словарей с информацией о файлах и папках
     """
     try:
-        # Проверяем, используется ли публичная папка (ПЕРВЫМ ДЕЛОМ!)
+        # Нормализуем путь
+        if folder_path is None:
+            folder_path = '/'
+        
+        # Убираем префикс "disk:" если есть
+        if folder_path.startswith('disk:'):
+            folder_path = folder_path[5:]
+        
+        # Нормализуем путь (убираем лишние слэши)
+        folder_path = folder_path.strip('/')
+        if not folder_path:
+            folder_path = '/'
+        else:
+            folder_path = f'/{folder_path}'
+        
+        # Проверяем наличие OAuth токена
+        token = get_yandex_disk_token()
         public_key = get_yandex_disk_public_key()
         
         # Отладочный вывод
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"Yandex Disk: public_key={public_key}, folder_path={folder_path}")
+        logger.info(f"Yandex Disk: token={'есть' if token else 'нет'}, public_key={public_key}, folder_path={folder_path}")
         
+        # ПРИОРИТЕТ 1: Если есть OAuth токен И запрашивается корень - используем OAuth для доступа к корню
+        if token and token.strip() and folder_path == '/':
+            logger.info("Используется OAuth токен для доступа к корню Яндекс Диска")
+            url = f"{YANDEX_DISK_API_BASE}/resources"
+            params = {
+                'path': '/',
+                'limit': 1000,
+                'sort': '-modified'
+            }
+            headers = get_headers()
+            response = requests.get(url, headers=headers, params=params, timeout=60)
+            
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get('_embedded', {}).get('items', [])
+                
+                formatted_items = []
+                for item in items:
+                    formatted_item = {
+                        'name': item.get('name', ''),
+                        'path': item.get('path', ''),
+                        'type': item.get('type', 'file'),
+                        'size': item.get('size', 0),
+                        'modified': item.get('modified', ''),
+                        'created': item.get('created', ''),
+                        'mime_type': item.get('mime_type', ''),
+                        'preview': item.get('preview', ''),
+                        'file': item.get('file', ''),
+                        'public_url': item.get('public_url', '')
+                    }
+                    formatted_items.append(formatted_item)
+                
+                return formatted_items
+            elif response.status_code == 401:
+                raise ValueError("Неверный OAuth токен или токен истек")
+            else:
+                error_data = response.json() if response.content else {}
+                error_message = error_data.get('message', f'Ошибка API: {response.status_code}')
+                raise Exception(f"Ошибка получения списка файлов: {error_message}")
+        
+        # ПРИОРИТЕТ 2: Если есть OAuth токен И запрашивается подпапка - используем OAuth
+        if token and token.strip():
+            logger.info(f"Используется OAuth токен для доступа к папке: {folder_path}")
+            url = f"{YANDEX_DISK_API_BASE}/resources"
+            params = {
+                'path': folder_path,
+                'limit': 1000,
+                'sort': '-modified'
+            }
+            headers = get_headers()
+            response = requests.get(url, headers=headers, params=params, timeout=60)
+            
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get('_embedded', {}).get('items', [])
+                
+                formatted_items = []
+                for item in items:
+                    formatted_item = {
+                        'name': item.get('name', ''),
+                        'path': item.get('path', ''),
+                        'type': item.get('type', 'file'),
+                        'size': item.get('size', 0),
+                        'modified': item.get('modified', ''),
+                        'created': item.get('created', ''),
+                        'mime_type': item.get('mime_type', ''),
+                        'preview': item.get('preview', ''),
+                        'file': item.get('file', ''),
+                        'public_url': item.get('public_url', '')
+                    }
+                    formatted_items.append(formatted_item)
+                
+                return formatted_items
+            elif response.status_code == 401:
+                raise ValueError("Неверный OAuth токен или токен истек")
+            elif response.status_code == 404:
+                raise ValueError(f"Папка не найдена: {folder_path}")
+            else:
+                error_data = response.json() if response.content else {}
+                error_message = error_data.get('message', f'Ошибка API: {response.status_code}')
+                raise Exception(f"Ошибка получения списка файлов: {error_message}")
+        
+        # ПРИОРИТЕТ 3: Если нет OAuth токена, но есть публичный ключ - используем публичную папку
         if public_key:
-            # Работа с публичной папкой (без OAuth токена)
             logger.info(f"Используется публичная папка с ключом: {public_key}")
-            return get_public_folder_contents(public_key, folder_path)
+            return get_public_folder_contents(public_key, folder_path if folder_path != '/' else None)
         
-        # Работа с обычной папкой (требуется OAuth токен)
-        # Но если публичный ключ не установлен, выдаем понятную ошибку
-        token = get_yandex_disk_token()
-        if not token or not token.strip():
-            raise ValueError(
-                "YANDEX_DISK_TOKEN не установлен в переменных окружения. "
-                "Для работы с публичной папкой установите YANDEX_DISK_PUBLIC_KEY в файле .env"
-            )
-        
-        if folder_path is None:
-            folder_path = get_yandex_disk_folder_path()
-        
-        # Проверяем, что folder_path не None и не пустой
-        if not folder_path:
-            folder_path = '/'
+        # Если ничего не настроено
+        raise ValueError(
+            "Не настроен ни YANDEX_DISK_TOKEN, ни YANDEX_DISK_PUBLIC_KEY. "
+            "Для доступа к корню Яндекс Диска установите YANDEX_DISK_TOKEN в файле .env"
+        )
         
         # Нормализуем путь: убираем префикс "disk:" если есть
         if folder_path and folder_path.startswith('disk:'):

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, 
   Home, 
@@ -32,6 +32,7 @@ interface ArchitecturalPlansViewProps {
 const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRole, onNavigateBack }) => {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedApartment, setSelectedApartment] = useState<string>('');
+  const [selectedBuilding, setSelectedBuilding] = useState<'T' | 'U' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [isUploading, setIsUploading] = useState(false);
@@ -47,12 +48,115 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
   const [defectsModeKey, setDefectsModeKey] = useState(0);
   const [showDefectsViewer, setShowDefectsViewer] = useState(false);
   const [showPlansModal, setShowPlansModal] = useState(false);
+  // Флаг для автоматического открытия первого плана в режиме дефекта
+  const [autoOpenDefectMode, setAutoOpenDefectMode] = useState(false);
 
   const { projects, loading: projectsLoading } = useProjects();
-  const { apartments, loading: apartmentsLoading } = useApartments(selectedProject);
-  const { plans, loading: plansLoading } = useArchitecturalPlans(selectedApartment);
+  const { apartments: allApartments, loading: apartmentsLoading } = useApartments(selectedProject);
+  const { plans, loading: plansLoading } = useArchitecturalPlans(selectedApartment, selectedBuilding);
   const { uploadPlan, uploading } = usePlanUpload();
   const { defectsCount, refreshDefectsCount } = useDefectsCount();
+
+  // Фильтруем квартиры по выбранному корпусу
+  const apartments = useMemo(() => {
+    console.log('🔍 Фильтрация квартир:', { selectedProject, selectedBuilding, allApartmentsCount: allApartments.length });
+    
+    // Если проект не выбран или это не "Вишнёвый сад", возвращаем все квартиры
+    if (!selectedProject || selectedProject !== 'zhk-vishnevyy-sad') {
+      console.log('📋 Проект не выбран или не Вишнёвый сад, возвращаем все квартиры');
+      return allApartments;
+    }
+
+    // Если корпус не выбран, возвращаем пустой массив (показываем выбор корпуса)
+    if (!selectedBuilding) {
+      console.log('📋 Корпус не выбран, возвращаем пустой массив');
+      return [];
+    }
+
+    // Для корпуса Т - все квартиры кроме квартир корпуса У (501, 502, 503, 504, 704)
+    if (selectedBuilding === 'T') {
+      const buildingUApartments = ['501', '502', '503', '504', '704'];
+      const filtered = allApartments.filter(apt => !buildingUApartments.includes(apt.apartment_number));
+      console.log('🏢 Корпус Т: отфильтровано квартир:', filtered.length, 'из', allApartments.length);
+      return filtered;
+    }
+
+    // Для корпуса У - ТОЛЬКО 5 квартир (501, 502, 503, 504 с 5 этажа, 704 с 7 этажа)
+    // Это отдельный корпус, не связанный с корпусом Т - НЕ показываем квартиры из корпуса Т
+    if (selectedBuilding === 'U') {
+      console.log('🏢 КОРПУС У ВЫБРАН! Создаем только 5 квартир');
+      const buildingUApartments = ['501', '502', '503', '504', '704'];
+      
+      // Создаем ТОЛЬКО эти 5 квартир для корпуса У, полностью игнорируя allApartments
+      const buildingUApartmentsList = buildingUApartments.map((num, index) => {
+        // Определяем этаж: 501-504 это 5 этаж, 704 это 7 этаж
+        const floor = num === '704' ? 7 : 5;
+        
+        return {
+          id: `apartment-${num}-building-U`,
+          project_id: selectedProject,
+          apartment_number: num,
+          floor: floor,
+          area: 45.5 + index * 5,
+          rooms: Math.min(4, Math.floor(index / 3) + 1),
+          status: 'available' as const,
+          price: 2500000 + index * 200000,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      });
+
+      console.log('✅ Корпус У: создано ТОЛЬКО', buildingUApartmentsList.length, 'квартир:', buildingUApartmentsList.map(a => `У-${a.apartment_number} (этаж ${a.floor})`));
+      console.log('❌ ИГНОРИРУЕМ allApartments, который содержит', allApartments.length, 'квартир');
+      
+      // Возвращаем ТОЛЬКО эти 5 квартир, ничего больше - полностью игнорируем allApartments
+      return buildingUApartmentsList;
+    }
+
+    console.log('⚠️ Неизвестный корпус, возвращаем пустой массив');
+    return [];
+  }, [allApartments, selectedBuilding, selectedProject]);
+
+  // ПРИНУДИТЕЛЬНАЯ ПРОВЕРКА: если корпус У выбран, ВСЕГДА возвращаем только 5 квартир
+  const finalApartments = useMemo(() => {
+    // ВАЖНО: Для корпуса У ВСЕГДА возвращаем только 5 квартир, независимо от apartments и проекта
+    if (selectedBuilding === 'U') {
+      console.log('🔒 ПРИНУДИТЕЛЬНАЯ ФИЛЬТРАЦИЯ: Корпус У выбран, создаем ТОЛЬКО 5 квартир');
+      console.log('📊 selectedProject =', selectedProject, 'apartments.length =', apartments.length);
+      
+      // ВСЕГДА создаем только 5 квартир для корпуса У
+      const buildingUApartments = ['501', '502', '503', '504', '704'];
+      const buildingUApartmentsList = buildingUApartments.map((num, index) => {
+        const floor = num === '704' ? 7 : 5;
+        return {
+          id: `apartment-${num}-building-U`,
+          project_id: selectedProject || 'zhk-vishnevyy-sad', // Используем selectedProject или дефолтное значение
+          apartment_number: num,
+          floor: floor,
+          area: 45.5 + index * 5,
+          rooms: Math.min(4, Math.floor(index / 3) + 1),
+          status: 'available' as const,
+          price: 2500000 + index * 200000,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      });
+      
+      console.log('✅ Корпус У: ПРИНУДИТЕЛЬНО создано', buildingUApartmentsList.length, 'квартир:', buildingUApartmentsList.map(a => a.apartment_number));
+      return buildingUApartmentsList;
+    }
+    
+    // Для корпуса Т и других случаев возвращаем apartments как есть
+    return apartments;
+  }, [apartments, selectedBuilding, selectedProject]);
+
+  // Функция для форматирования номера квартиры с префиксом корпуса
+  const formatApartmentNumber = (apartmentNumber: string): string => {
+    if (!selectedBuilding || selectedProject !== 'zhk-vishnevyy-sad') {
+      return apartmentNumber;
+    }
+    return `${selectedBuilding}-${apartmentNumber}`;
+  };
 
   // Функции для работы с дефектами
   const handlePlanClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -105,11 +209,71 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
     return matchesSearch && matchesType;
   });
 
+  // Сбрасываем selectedPlan при изменении selectedApartment
+  useEffect(() => {
+    // Когда меняется квартира, сбрасываем выбранный план
+    console.log('🔄 Сброс selectedPlan при изменении selectedApartment:', selectedApartment);
+    setSelectedPlan(null);
+    setShowPdfViewer(false);
+    setShowDefectsViewer(false);
+  }, [selectedApartment]);
+
+  // Обновляем selectedPlan при загрузке новых планов, если он не соответствует текущей квартире
+  useEffect(() => {
+    // Если планы еще загружаются или их нет - ничего не делаем
+    if (plansLoading || !filteredPlans.length) {
+      return;
+    }
+
+    // Если selectedPlan не установлен или относится к другой квартире - устанавливаем первый план
+    if (!selectedPlan) {
+      console.log('✅ Устанавливаем первый план из загруженных:', filteredPlans[0]?.file_name);
+      setSelectedPlan(filteredPlans[0]);
+      return;
+    }
+
+    // Проверяем, соответствует ли selectedPlan текущей квартире
+    // Извлекаем номер квартиры из selectedPlan (если есть plan_source_apartment или из file_name)
+    const currentPlanApartment = selectedPlan.plan_source_apartment || 
+      selectedPlan.file_name?.match(/[ТTУU](\d+)/)?.[1];
+    
+    // Извлекаем номер квартиры из selectedApartment
+    const selectedApartmentNum = selectedApartment.replace('apartment-', '').replace('-building-U', '').replace('-building-T', '');
+    
+    if (currentPlanApartment !== selectedApartmentNum) {
+      console.log('⚠️ selectedPlan не соответствует текущей квартире:', {
+        currentPlanApartment,
+        selectedApartmentNum,
+        selectedPlanFile: selectedPlan.file_name
+      });
+      console.log('✅ Обновляем selectedPlan на первый план для квартиры:', selectedApartmentNum);
+      setSelectedPlan(filteredPlans[0]);
+    }
+  }, [plans, filteredPlans, plansLoading, selectedApartment, selectedPlan]);
+
+  // Эффект для автоматического открытия первого плана в режиме дефекта
+  useEffect(() => {
+    // Срабатывает только когда мы пришли "из быстрой кнопки" и уже открыто модальное с планами
+    if (!autoOpenDefectMode) return;
+    if (!showPlansModal) return;
+    if (plansLoading) return;
+    if (!filteredPlans.length) return;
+
+    const firstPlan = filteredPlans[0];
+
+    // Открываем сразу просмотр плана
+    setSelectedPlan(firstPlan);
+    setShowPlansModal(false);
+    setShowPdfViewer(true);
+    setShowDefectsMode(true); // сразу включаем режим добавления дефекта
+    setAutoOpenDefectMode(false); // чтобы не переоткрывать повторно
+  }, [autoOpenDefectMode, showPlansModal, plansLoading, filteredPlans]);
+
   const handleFileUpload = async () => {
     if (!uploadFile || !selectedApartment) return;
 
     setIsUploading(true);
-    const result = await uploadPlan(uploadFile, selectedApartment, uploadType);
+    const result = await uploadPlan(uploadFile, selectedApartment, uploadType, selectedBuilding);
     
     if (result) {
       setShowUploadModal(false);
@@ -239,7 +403,7 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
               description: 'Современный жилой комплекс',
               address: 'ул. Вишневая, 15',
               status: 'construction' as const,
-              total_apartments: 46,
+              total_apartments: 51,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             }]).map((project) => (
@@ -248,6 +412,7 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
                 onClick={() => {
                   setSelectedProject(project.id);
                   setSelectedApartment('');
+                  setSelectedBuilding(null); // Сбрасываем выбор корпуса при выборе проекта
                 }}
                 className={`group relative p-6 rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 ${
                   selectedProject === project.id
@@ -297,18 +462,79 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
         )}
       </div>
 
-      {/* Выбор квартиры */}
+      {/* Выбор корпуса и квартиры */}
       {selectedProject && (
         <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900/80 via-slate-900/40 to-slate-900/20 shadow-[0_25px_80px_rgba(8,15,40,0.65)] p-6">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <Home className="w-6 h-6 text-white" />
-            </div>
+          {!selectedBuilding ? (
+            // Выбор корпуса
             <div>
-              <h2 className="text-xl font-bold text-white">Выбор квартиры</h2>
-              <p className="text-sm text-slate-400">Выберите квартиру для просмотра планов</p>
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
+                  <Building2 className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">Выбор корпуса</h2>
+                  <p className="text-sm text-slate-400">Выберите корпус для просмотра планов</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => setSelectedBuilding('T')}
+                  className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 transform hover:scale-105"
+                >
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-3">
+                      <Building2 className="w-8 h-8 text-white" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-1">Корпус Т</h3>
+                    <p className="text-sm text-slate-400">46 квартир</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('🏢 КЛИК: Выбран корпус У');
+                    setSelectedApartment(''); // Сбрасываем выбранную квартиру ПЕРВЫМ
+                    setSelectedBuilding('U'); // Затем устанавливаем корпус
+                    console.log('🏢 КЛИК: selectedBuilding установлен в U');
+                  }}
+                  className="p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 transform hover:scale-105"
+                >
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center mx-auto mb-3">
+                      <Building2 className="w-8 h-8 text-white" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-1">Корпус У</h3>
+                    <p className="text-sm text-slate-400">5 квартир</p>
+                  </div>
+                </button>
+              </div>
+              <button
+                onClick={() => setSelectedProject('')}
+                className="mt-6 px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white text-sm font-medium transition"
+              >
+                ← Назад к проектам
+              </button>
             </div>
-          </div>
+          ) : (
+            // Выбор квартиры
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
+                    <Home className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Выбор квартиры</h2>
+                    <p className="text-sm text-slate-400">Корпус {selectedBuilding} • Выберите квартиру для просмотра планов</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedBuilding(null)}
+                  className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white text-sm font-medium transition"
+                >
+                  ← Выбрать корпус
+                </button>
+              </div>
           
           {apartmentsLoading ? (
             <div className="text-center py-8">
@@ -317,16 +543,26 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
             </div>
           ) : (
             <div className="space-y-6">
+              {/* Отладочная информация */}
+              {selectedBuilding === 'U' && (
+                <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
+                  <p className="text-yellow-200 text-sm">
+                    🔍 Отладка: Корпус У выбран. Квартир в массиве: {finalApartments.length}. 
+                    Номера: {finalApartments.map(a => a.apartment_number).join(', ')}
+                  </p>
+                </div>
+              )}
               {/* Группируем квартиры по этажам */}
               {(() => {
-                const apartmentsByFloor = apartments.reduce((acc, apartment) => {
+                console.log('🎨 Рендер: finalApartments.length =', finalApartments.length, 'selectedBuilding =', selectedBuilding);
+                const apartmentsByFloor = finalApartments.reduce((acc, apartment) => {
                   const floor = apartment.floor;
                   if (!acc[floor]) {
                     acc[floor] = [];
                   }
                   acc[floor].push(apartment);
                   return acc;
-                }, {} as Record<number, typeof apartments>);
+                }, {} as Record<number, typeof finalApartments>);
 
                 // Сортируем этажи по убыванию (сверху вниз)
                 const sortedFloors = Object.keys(apartmentsByFloor)
@@ -365,15 +601,23 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
                                 : 'border-white/10 hover:border-emerald-500/30 bg-white/5 hover:bg-white/10'
                             }`}
                             onClick={() => {
+                              // Сбрасываем выбранный план перед открытием новой квартиры
+                              setSelectedPlan(null);
+                              setShowPdfViewer(false);
+                              setShowDefectsViewer(false);
                               setSelectedApartment(apartment.id);
                               setShowPlansModal(true);
+                              // Если пользователь технадзор, автоматически откроем первый план в режиме дефекта
+                              if (userRole === 'technadzor') {
+                                setAutoOpenDefectMode(true);
+                              }
                             }}
                           >
                             <div className="text-center">
                               <div className={`text-2xl font-bold mb-2 ${
                                 selectedApartment === apartment.id ? 'text-white' : 'text-white'
                               }`}>
-                                {apartment.apartment_number}
+                                {formatApartmentNumber(apartment.apartment_number)}
                               </div>
                               <div className={`text-xs space-y-1 ${
                                 selectedApartment === apartment.id ? 'text-green-100' : 'text-slate-300'
@@ -438,12 +682,17 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
               })()}
             </div>
           )}
+            </div>
+          )}
         </div>
       )}
 
       {/* Модальное окно: планы квартиры (открывается по клику на квартиру) */}
       {showPlansModal && selectedApartment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowPlansModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => {
+          setShowPlansModal(false);
+          setSelectedPlan(null); // Сбрасываем выбранный план при закрытии модального окна
+        }}>
           <div className="rounded-2xl shadow-xl border border-white/10 bg-slate-900/95 backdrop-blur-xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-white/10">
               <div className="flex items-center space-x-3">
@@ -452,14 +701,17 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-white">
-                    Планы квартиры № {apartments.find((a) => a.id === selectedApartment)?.apartment_number ?? '—'}
+                    Планы квартиры № {selectedApartment ? formatApartmentNumber(finalApartments.find((a) => a.id === selectedApartment)?.apartment_number ?? '—') : '—'}
                   </h2>
                   <p className="text-sm text-slate-400">Просмотр и управление планами</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowPlansModal(false)}
+                onClick={() => {
+                  setShowPlansModal(false);
+                  setSelectedPlan(null); // Сбрасываем выбранный план при закрытии модального окна
+                }}
                 className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition"
                 aria-label="Закрыть"
               >
@@ -483,11 +735,11 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
                 onChange={(e) => setFilterType(e.target.value)}
                 className="px-4 py-2 border border-white/10 rounded-xl bg-white/5 text-white focus:ring-2 focus:ring-purple-500/50"
               >
-                <option value="all">Все типы</option>
-                <option value="floor_plan">Планировка</option>
-                <option value="elevation">Фасад</option>
-                <option value="section">Разрез</option>
-                <option value="3d_model">3D модель</option>
+                <option value="all" className="bg-slate-800 text-white">Все типы</option>
+                <option value="floor_plan" className="bg-slate-800 text-white">Планировка</option>
+                <option value="elevation" className="bg-slate-800 text-white">Фасад</option>
+                <option value="section" className="bg-slate-800 text-white">Разрез</option>
+                <option value="3d_model" className="bg-slate-800 text-white">3D модель</option>
               </select>
               </div>
 
@@ -502,6 +754,10 @@ const ArchitecturalPlansView: React.FC<ArchitecturalPlansViewProps> = ({ userRol
             <div>
               {/* Информация о типе планировки */}
               <div className="mb-4 p-3 rounded-xl border border-white/10 bg-white/5">
+                <p className="text-xs text-slate-400 mb-1">🔍 Отладка: квартира {selectedApartment}, планов найдено: {filteredPlans.length}</p>
+                {filteredPlans.length > 0 && (
+                  <p className="text-xs text-slate-400 mb-1">Первый план: {filteredPlans[0].file_name}, источник: {filteredPlans[0].plan_source_apartment}</p>
+                )}
                 <p className="text-sm text-slate-300">
                   {filteredPlans.length} планов найдено
                   {filteredPlans[0].is_typical && (

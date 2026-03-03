@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ManagementHeader from './components/management/ManagementHeader';
+import { getCurrentUser, UserProfile } from './lib/authApi';
 import ManagementNav from './components/management/ManagementNav';
 import SummaryView from './components/management/SummaryView';
 import AccountingView from './components/management/AccountingView';
@@ -16,6 +17,17 @@ interface ManagementAppProps {
 function ManagementApp({ onLogout }: ManagementAppProps) {
   const [currentView, setCurrentView] = useState('summary');
   const [accountingSubView, setAccountingSubView] = useState<'balance' | 'cashflow' | 'pl'>('balance');
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const { user } = await getCurrentUser();
+      if (user) {
+        setCurrentUser(user);
+      }
+    };
+    loadUser();
+  }, []);
 
   const renderContent = () => {
     switch (currentView) {
@@ -45,7 +57,7 @@ function ManagementApp({ onLogout }: ManagementAppProps) {
         <div className="absolute top-40 right-0 h-72 w-72 rounded-full bg-purple-500/10 blur-[140px]" />
       </div>
       <div className="relative z-10">
-        <ManagementHeader onLogout={onLogout} />
+        <ManagementHeader onLogout={onLogout} currentUserId={currentUser?.id || null} />
         <ManagementNav
           currentView={currentView}
           onViewChange={setCurrentView}

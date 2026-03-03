@@ -45,13 +45,14 @@ const YandexDiskView: React.FC<YandexDiskViewProps> = ({ userRole }) => {
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
   const [openingFiles, setOpeningFiles] = useState<Set<string>>(new Set());
   const [folderPath, setFolderPath] = useState<string>('');
-  const [currentPath, setCurrentPath] = useState<string>(''); // Текущий путь для навигации
+  const [currentPath, setCurrentPath] = useState<string>(''); // Текущий путь для навигации (пусто = корень, все папки)
   const [pathHistory, setPathHistory] = useState<Array<{path: string, name: string}>>([]); // История путей для breadcrumbs
   const [viewingFile, setViewingFile] = useState<{url: string; name: string; type: string} | null>(null); // Файл для просмотра
 
   // Загружаем файлы при открытии компонента и при изменении пути
   useEffect(() => {
-    loadFiles(currentPath || undefined);
+    // По умолчанию показываем корень (все папки на Яндекс Диске)
+    loadFiles(currentPath || undefined); // undefined = корень
   }, [currentPath]);
 
   // Автоматическое обновление списка файлов каждые 30 секунд
@@ -122,8 +123,10 @@ const YandexDiskView: React.FC<YandexDiskViewProps> = ({ userRole }) => {
         const currentName = currentFolder?.name || currentPath.split('/').pop() || 'Папка';
         setPathHistory(prev => [...prev, { path: currentPath, name: currentName }]);
       }
-      // Устанавливаем новый путь
-      setCurrentPath(folder.path);
+      // Используем relativePath если он есть, иначе полный путь
+      // relativePath - это путь относительно корня публичной папки, который нужен для API
+      const pathToUse = (folder as any).relativePath || folder.path;
+      setCurrentPath(pathToUse);
     }
   };
 
@@ -162,10 +165,11 @@ const YandexDiskView: React.FC<YandexDiskViewProps> = ({ userRole }) => {
     try {
       setOpeningFiles(prev => new Set(prev).add(file.path));
       
-      // Получаем ссылку для просмотра (не скачивания)
+      // Получаем ссылку для просмотра через наш бэкэнд прокси
+      // Это позволяет открывать файлы в iframe без проблем с CSP
       const viewUrl = await getYandexDiskViewLink(file.path);
       
-      // Открываем файл внутри приложения
+      // Открываем файл внутри приложения через FileViewer
       setViewingFile({
         url: viewUrl,
         name: file.name,
@@ -265,7 +269,10 @@ const YandexDiskView: React.FC<YandexDiskViewProps> = ({ userRole }) => {
       {(currentPath || pathHistory.length > 0) && (
         <div className="flex items-center gap-2 text-sm text-slate-300 bg-white/5 border border-white/10 rounded-xl px-4 py-2">
           <button
-            onClick={() => handleBreadcrumbClick(-1)}
+            onClick={() => {
+              setCurrentPath('');
+              setPathHistory([]);
+            }}
             className="flex items-center gap-1 hover:text-blue-300 transition-colors"
           >
             <Home className="w-4 h-4" />
@@ -324,9 +331,9 @@ const YandexDiskView: React.FC<YandexDiskViewProps> = ({ userRole }) => {
             onChange={(e) => setFilterType(e.target.value as 'all' | 'file' | 'dir')}
             className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/30"
           >
-            <option value="all">Все</option>
-            <option value="file">Файлы</option>
-            <option value="dir">Папки</option>
+            <option value="all" className="bg-slate-800 text-white">Все</option>
+            <option value="file" className="bg-slate-800 text-white">Файлы</option>
+            <option value="dir" className="bg-slate-800 text-white">Папки</option>
           </select>
         </div>
       </div>

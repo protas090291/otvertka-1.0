@@ -1,30 +1,75 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Camera, Calendar, Download, Filter, Plus } from 'lucide-react';
+import { FileText, Camera, Calendar, Download, Plus } from 'lucide-react';
 import { UserRole, Report } from '../types';
 import { getAllReports, createReport } from '../lib/reportsApi';
+import { getAllProjects, Project } from '../lib/projectsApi';
+import { getAssignableUserProfiles, getCurrentUser, UserProfile } from '../lib/authApi';
 
 interface ReportsViewProps {
   userRole: UserRole;
 }
 
-const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
+const ReportsViewWithAPI: React.FC<ReportsViewProps> = () => {
   const [selectedType, setSelectedType] = useState('all');
   const [isCreatingReport, setIsCreatingReport] = useState(false);
+  const [isCreating, setIsCreating] = useState(false); // Состояние загрузки при создании отчёта
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   // Загружаем данные из API при монтировании компонента
   useEffect(() => {
     loadReports();
+    loadUsers(); // Загружаем пользователей для определения авторов отчётов
   }, []);
 
   const loadReports = async () => {
     try {
       setLoading(true);
-      const reportsData = await getAllReports();
-      setReports(reportsData);
+      const apiReports = await getAllReports();
+
+      // Приводим данные из API к фронтовому типу Report (для отображения)
+      const mapped = (apiReports as any[]).map((r) => {
+        let meta: any = null;
+        if (typeof r.notes === 'string') {
+          try {
+            meta = JSON.parse(r.notes);
+          } catch {
+            meta = null;
+          }
+        }
+
+        // Определяем имя автора: сначала из метаданных, потом из списка пользователей по ID
+        let displayAuthor: string = 'Неизвестный автор';
+        
+        if (meta?.authorName) {
+          displayAuthor = meta.authorName;
+        } else if (meta?.authorId || r.created_by) {
+          const authorId = meta?.authorId || r.created_by;
+          const authorUser = users.find(u => u.id === authorId);
+          if (authorUser) {
+            displayAuthor = authorUser.full_name || authorUser.email || 'Неизвестный автор';
+          }
+        }
+
+        const logicalType = meta?.logicalType as Report['type'] | undefined;
+
+        return {
+          id: r.id,
+          projectId: r.project_id || r.projectId || '',
+          date: r.created_at || r.date || new Date().toISOString(),
+          author: displayAuthor,
+          type: logicalType || ('daily' as Report['type']),
+          title: r.title || '',
+          description: r.description || r.content || '',
+          photos: (r.photos as string[]) || [],
+          attachments: (r.attachments as string[]) || []
+        } as Report;
+      });
+
+      setReports(mapped);
     } catch (error) {
       console.error('Ошибка загрузки отчетов:', error);
       setNotificationMessage('Ошибка загрузки данных');
@@ -37,83 +82,176 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
   const [reportForm, setReportForm] = useState({
     project: '',
     description: '',
-    type: 'daily'
-  });
-  const [warehouseReportForm, setWarehouseReportForm] = useState({
-    title: '',
-    description: '',
-    criticalItems: '',
-    recommendations: ''
+    type: 'daily' as 'daily' | 'weekly' | 'milestone',
+    recipient: '' // Получатель отчёта (опционально)
   });
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
   const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([]);
-  const [uploadedPhotos, setUploadedPhotos] = useState<{[reportId: string]: string[]}>({});
-  const [isCreatingWarehouseReport, setIsCreatingWarehouseReport] = useState(false);
-  const [isCreatingTechnadzorReport, setIsCreatingTechnadzorReport] = useState(false);
-  const [technadzorReportForm, setTechnadzorReportForm] = useState({
-    project: '',
-    description: '',
-    type: 'daily' as 'daily' | 'weekly' | 'milestone',
-    contractor: ''
-  });
-  const [isCreatingContractorReport, setIsCreatingContractorReport] = useState(false);
-  const [contractorReportForm, setContractorReportForm] = useState({
-    project: '',
-    description: '',
-    type: 'daily' as 'daily' | 'weekly' | 'milestone',
-    client: ''
-  });
-  const [foremanCreatedReports, setForemanCreatedReports] = useState<Set<string>>(new Set());
-  const [workerCreatedReports, setWorkerCreatedReports] = useState<Set<string>>(new Set());
+  const [foremanCreatedReports] = useState<Set<string>>(new Set());
+  const [workerCreatedReports] = useState<Set<string>>(new Set());
+  
+  // Состояния для реальных данных
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Проверяем, заполнены ли обязательные поля
   const isFormValid = reportForm.project && reportForm.description.trim();
+  const authorName =
+    currentUser?.full_name ||
+    currentUser?.email ||
+    'Пользователь';
+  
+  // Загрузка проектов
+  const loadProjects = async () => {
+    try {
+      setLoadingProjects(true);
+      const projectsData = await getAllProjects();
+      setProjects(projectsData);
+    } catch (error) {
+      console.error('Ошибка загрузки проектов:', error);
+    } finally {
+      setLoadingProjects(false);
+    }
+  };
+  
+  // Загрузка текущего пользователя (для имени автора и фильтрации доступа)
+  useEffect(() => {
+    (async () => {
+      const { user } = await getCurrentUser();
+      if (user) {
+        setCurrentUser(user);
+      }
+    })();
+  }, []);
+
+  // Загрузка пользователей
+  const loadUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const { profiles, error } = await getAssignableUserProfiles();
+      if (error) {
+        console.error('Ошибка загрузки пользователей:', error);
+      } else {
+        setUsers(profiles || []);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки пользователей:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+  
+  // Перезагружаем отчёты после загрузки пользователей, чтобы обновить имена авторов
+  useEffect(() => {
+    if (users.length > 0) {
+      loadReports();
+    }
+  }, [users.length]);
+
+  // Загружаем проекты и пользователей при открытии модального окна
+  useEffect(() => {
+    if (isCreatingReport) {
+      loadProjects();
+      loadUsers();
+    }
+  }, [isCreatingReport]);
 
   // Функция для создания нового отчета
   const handleCreateReport = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid) {
+      console.log('Форма не валидна:', { project: reportForm.project, description: reportForm.description });
+      setNotificationMessage('Заполните все обязательные поля');
+        setShowNotification(true);
+        setTimeout(() => setShowNotification(false), 3000);
+      return;
+    }
+
+    if (!currentUser) {
+      console.error('Текущий пользователь не загружен');
+      setNotificationMessage('Ошибка: пользователь не загружен. Пожалуйста, обновите страницу.');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
+      return;
+    }
+
+    setIsCreating(true);
 
     try {
-      const projectNames = {
-        '1': 'ЖК "Северная звезда"',
-        '2': 'Офисный центр "Технопарк"',
-        '3': 'Частный дом Иванова'
-      };
+      const selectedProject = projects.find(p => p.id === reportForm.project);
+      const selectedRecipient = reportForm.recipient ? users.find(u => u.id === reportForm.recipient) : null;
+      const projectName = selectedProject?.name || 'Проект';
+      const recipientName = selectedRecipient?.full_name || selectedRecipient?.email || null;
+
+      // Формируем заголовок отчёта
+      let title = `${typeLabels[reportForm.type as keyof typeof typeLabels]} отчёт - ${projectName}`;
+      if (recipientName) {
+        title = `Отчёт для ${recipientName} - ${projectName}`;
+      }
 
       const newReport = {
         project_id: reportForm.project,
-        title: `${typeLabels[reportForm.type as keyof typeof typeLabels]} отчёт - ${projectNames[reportForm.project as keyof typeof projectNames]}`,
+        title,
         description: reportForm.description,
-        type: reportForm.type as 'daily' | 'weekly' | 'milestone',
-        author: userRole === 'worker' ? 'Рабочий' : userRole === 'storekeeper' ? 'Складчик' : userRole === 'technadzor' ? 'ТехНадзор' : userRole === 'foreman' ? 'Прораб' : 'Пользователь',
-        photos: photoPreviewUrls,
-        attachments: []
+        type: reportForm.type as 'daily' | 'weekly' | 'milestone', // Используем тип из формы
+        photos: photoPreviewUrls || [], // Убеждаемся, что это массив
+        content: reportForm.description,
+        created_by: currentUser.id, // ID пользователя для created_by
+        author: authorName, // Имя автора (обязательное поле в базе данных)
+        // Метаданные для авторства и доступа
+        notes: JSON.stringify({
+          authorId: currentUser.id,
+          authorName,
+          recipientId: reportForm.recipient || null,
+          recipientName: recipientName || null,
+          periodType: reportForm.type
+        })
       };
 
+      console.log('Создание отчёта с данными:', newReport);
       const createdReport = await createReport(newReport);
+      console.log('Отчёт создан:', createdReport);
+      
       if (createdReport) {
         await loadReports(); // Перезагружаем данные
         
-        // Если отчет создан прорабом, отмечаем его как созданный прорабом
-        if (userRole === 'foreman') {
-          setForemanCreatedReports(prev => new Set([...prev, createdReport.id]));
+        // Создаём уведомление для получателя (если указан)
+        if (reportForm.recipient && currentUser) {
+          try {
+            console.log('📤 Создание уведомления об отчёте...', {
+              recipientId: reportForm.recipient,
+              reportTitle: title,
+              creatorId: currentUser.id
+            });
+            
+            const { createNotification } = await import('../lib/notificationsApi');
+            
+            const success = await createNotification({
+              type: 'report',
+              title: 'Новый отчёт получен',
+              message: `${authorName} создал отчёт для вас: "${title}"`,
+              recipientId: reportForm.recipient,
+              persistent: true, // Постоянное уведомление
+              createdBy: currentUser.id
+            });
+            
+            if (success) {
+              console.log('✅ Уведомление об отчёте успешно создано');
+            } else {
+              console.error('❌ Не удалось создать уведомление об отчёте');
+      }
+    } catch (error) {
+            console.error('❌ Ошибка создания уведомления об отчёте:', error);
+          }
         }
-        // Если отчет создан рабочим, отмечаем его как созданный рабочим
-        if (userRole === 'worker') {
-          setWorkerCreatedReports(prev => new Set([...prev, createdReport.id]));
-        }
-        
-        // Сохраняем фотографии для этого отчета
-        setUploadedPhotos(prev => ({
-          ...prev,
-          [createdReport.id]: photoPreviewUrls
-        }));
-        
+
         // Сброс формы
         setReportForm({
           project: '',
           description: '',
-          type: 'daily'
+          type: 'daily',
+          recipient: ''
         });
         setSelectedPhotos([]);
         setPhotoPreviewUrls([]);
@@ -125,69 +263,21 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
         setNotificationMessage('Отчёт успешно создан!');
         setShowNotification(true);
         setTimeout(() => setShowNotification(false), 3000);
-      }
-    } catch (error) {
-      console.error('Ошибка создания отчета:', error);
-      setNotificationMessage('Ошибка создания отчета');
-      setShowNotification(true);
-    }
-  };
-
-  // Функция для создания складского отчета
-  const handleCreateWarehouseReport = async () => {
-    if (!warehouseReportForm.title.trim() || !warehouseReportForm.description.trim()) return;
-
-    try {
-      const newWarehouseReport = {
-        project_id: 'warehouse', // Специальный ID для складских отчетов
-        title: warehouseReportForm.title,
-        description: warehouseReportForm.description,
-        type: 'warehouse' as any,
-        author: 'Складчик',
-        photos: photoPreviewUrls,
-        attachments: []
-      };
-
-      const createdReport = await createReport(newWarehouseReport);
-      if (createdReport) {
-        await loadReports(); // Перезагружаем данные
-        
-        // Сброс формы
-        setWarehouseReportForm({
-          title: '',
-          description: '',
-          criticalItems: '',
-          recommendations: ''
-        });
-        setSelectedPhotos([]);
-        setPhotoPreviewUrls([]);
-        
-        // Закрытие формы создания
-        setIsCreatingWarehouseReport(false);
-        
-        // Показываем уведомление
-        setNotificationMessage('Складской отчёт создан!');
+      } else {
+        console.error('Отчёт не был создан, createReport вернул null/undefined');
+        setNotificationMessage('Ошибка: не удалось создать отчёт');
         setShowNotification(true);
         setTimeout(() => setShowNotification(false), 3000);
       }
     } catch (error) {
-      console.error('Ошибка создания складского отчета:', error);
-      setNotificationMessage('Ошибка создания складского отчета');
+      console.error('Ошибка создания отчета:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      setNotificationMessage(`Ошибка создания отчета: ${errorMessage}`);
       setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 5000);
+    } finally {
+      setIsCreating(false);
     }
-  };
-
-  // Функция для отмены создания складского отчета
-  const handleCancelWarehouseReport = () => {
-    setWarehouseReportForm({
-      title: '',
-      description: '',
-      criticalItems: '',
-      recommendations: ''
-    });
-    setSelectedPhotos([]);
-    setPhotoPreviewUrls([]);
-    setIsCreatingWarehouseReport(false);
   };
 
   // Функция для сброса формы
@@ -195,149 +285,12 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
     setReportForm({
       project: '',
       description: '',
-      type: 'daily'
+      type: 'daily',
+      recipient: ''
     });
     setSelectedPhotos([]);
     setPhotoPreviewUrls([]);
     setIsCreatingReport(false);
-  };
-
-  // Функция для создания отчета технадзора для подрядчика
-  const handleCreateTechnadzorReport = async () => {
-    if (!technadzorReportForm.project || !technadzorReportForm.description.trim() || !technadzorReportForm.contractor) return;
-
-    try {
-      const projectNames = {
-        '1': 'ЖК "Северная звезда"',
-        '2': 'Офисный центр "Технопарк"',
-        '3': 'Частный дом Иванова'
-      };
-
-      const newReport = {
-        project_id: technadzorReportForm.project,
-        title: `Отчет технадзора для ${technadzorReportForm.contractor} - ${projectNames[technadzorReportForm.project as keyof typeof projectNames]}`,
-        description: technadzorReportForm.description,
-        type: 'technadzor' as any, // Специальный тип для отчетов технадзора
-        author: 'ТехНадзор',
-        photos: photoPreviewUrls,
-        attachments: []
-      };
-
-      const createdReport = await createReport(newReport);
-      if (createdReport) {
-        await loadReports(); // Перезагружаем данные
-        
-        // Сохраняем фотографии для отображения
-        setUploadedPhotos(prev => ({
-          ...prev,
-          [createdReport.id]: photoPreviewUrls
-        }));
-
-        // Сброс формы
-        setTechnadzorReportForm({
-          project: '',
-          description: '',
-          type: 'daily',
-          contractor: ''
-        });
-        setSelectedPhotos([]);
-        setPhotoPreviewUrls([]);
-        
-        // Закрытие формы создания
-        setIsCreatingTechnadzorReport(false);
-        
-        // Показываем уведомление об успешном создании
-        setNotificationMessage('Отчёт технадзора создан!');
-        setShowNotification(true);
-        setTimeout(() => setShowNotification(false), 3000);
-      }
-    } catch (error) {
-      console.error('Ошибка создания отчета технадзора:', error);
-      setNotificationMessage('Ошибка создания отчета технадзора');
-      setShowNotification(true);
-    }
-  };
-
-  // Функция для сброса формы отчета технадзора
-  const handleCancelTechnadzorReport = () => {
-    setTechnadzorReportForm({
-      project: '',
-      description: '',
-      type: 'daily',
-      contractor: ''
-    });
-    setSelectedPhotos([]);
-    setPhotoPreviewUrls([]);
-    setIsCreatingTechnadzorReport(false);
-  };
-
-  // Функция для создания отчета подрядчика для заказчика
-  const handleCreateContractorReport = async () => {
-    if (!contractorReportForm.project || !contractorReportForm.description.trim() || !contractorReportForm.client) return;
-
-    try {
-      const projectNames = {
-        '1': 'ЖК "Северная звезда"',
-        '2': 'Офисный центр "Технопарк"',
-        '3': 'Частный дом Иванова'
-      };
-
-      const newReport = {
-        project_id: contractorReportForm.project,
-        title: `Отчет подрядчика для ${contractorReportForm.client} - ${projectNames[contractorReportForm.project as keyof typeof projectNames]}`,
-        description: contractorReportForm.description,
-        type: 'contractor' as any, // Специальный тип для отчетов подрядчика
-        author: 'Подрядчик',
-        photos: photoPreviewUrls,
-        attachments: []
-      };
-
-      const createdReport = await createReport(newReport);
-      if (createdReport) {
-        await loadReports(); // Перезагружаем данные
-        
-        // Сохраняем фотографии для отображения
-        setUploadedPhotos(prev => ({
-          ...prev,
-          [createdReport.id]: photoPreviewUrls
-        }));
-
-        // Сброс формы
-        setContractorReportForm({
-          project: '',
-          description: '',
-          type: 'daily',
-          client: ''
-        });
-        setSelectedPhotos([]);
-        setPhotoPreviewUrls([]);
-        
-        // Закрытие формы создания
-        setIsCreatingContractorReport(false);
-        
-        // Показываем уведомление
-        setNotificationMessage('Отчёт подрядчика создан!');
-        setShowNotification(true);
-        setTimeout(() => setShowNotification(false), 3000);
-      }
-    } catch (error) {
-      console.error('Ошибка создания отчета подрядчика:', error);
-      setNotificationMessage('Ошибка создания отчета подрядчика');
-      setShowNotification(true);
-    }
-  };
-
-  // Функция для отмены создания отчета подрядчика
-  const handleCancelContractorReport = () => {
-    setContractorReportForm({
-      project: '',
-      description: '',
-      type: 'daily',
-      client: ''
-    });
-    setSelectedPhotos([]);
-    setPhotoPreviewUrls([]);
-    setIsCreatingContractorReport(false);
   };
 
   // Функция для выбора фотографий
@@ -384,28 +337,48 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
     contractor: 'Подрядчик'
   };
 
+  // Дополнительная фильтрация: отчёт виден только постановщику (автору) и исполнителю (получателю)
   const filteredReports = reports.filter(report => {
-    // Складские отчеты видны только складчику и подрядчику
-    if (report.type === 'warehouse' && userRole !== 'storekeeper' && userRole !== 'contractor') {
+    const anyReport = report as any;
+
+    // Пытаемся прочитать метаданные из поля notes
+    let meta: {
+      authorId?: string | null;
+      authorName?: string;
+      recipientId?: string | null;
+      recipientName?: string;
+      logicalType?: string;
+      periodType?: string;
+    } | null = null;
+
+    if (typeof anyReport.notes === 'string') {
+      try {
+        meta = JSON.parse(anyReport.notes);
+      } catch {
+        meta = null;
+      }
+    }
+
+    const currentUserId = currentUser?.id;
+    const authorId = meta?.authorId || anyReport.created_by || null;
+    const recipientId = meta?.recipientId || null;
+
+    // Если у нас есть информация об авторе/получателе и есть текущий пользователь,
+    // то показываем отчёт только автору и получателю
+    if (currentUserId && (authorId || recipientId)) {
+      const isAuthor = authorId === currentUserId;
+      const isRecipient = recipientId === currentUserId;
+      if (!isAuthor && !isRecipient) {
       return false;
     }
-    // Отчеты технадзора видны только технадзору и подрядчикам
-    if (report.type === 'technadzor' && userRole !== 'technadzor' && userRole !== 'contractor') {
-      return false;
     }
-    // Отчеты подрядчика видны только подрядчику и заказчику
-    if (report.type === 'contractor' && userRole !== 'contractor' && userRole !== 'client') {
-      return false;
-    }
-    // Отчеты прораба видны только прорабу и подрядчику
-    if (foremanCreatedReports.has(report.id) && userRole !== 'foreman' && userRole !== 'contractor') {
-      return false;
-    }
-    // Отчеты рабочих видны только рабочим и прорабу
-    if (workerCreatedReports.has(report.id) && userRole !== 'worker' && userRole !== 'foreman') {
-      return false;
-    }
-    return selectedType === 'all' || report.type === selectedType || (selectedType === 'foreman' && foremanCreatedReports.has(report.id)) || (selectedType === 'worker' && workerCreatedReports.has(report.id));
+
+    return (
+      selectedType === 'all' ||
+      report.type === selectedType ||
+      (selectedType === 'foreman' && foremanCreatedReports.has(report.id)) ||
+      (selectedType === 'worker' && workerCreatedReports.has(report.id))
+    );
   });
 
   if (loading) {
@@ -429,159 +402,6 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
           </div>
         </div>
       )}
-
-      {/* Форма создания отчета подрядчика для заказчика */}
-      {isCreatingContractorReport && (
-        <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900/80 via-slate-900/40 to-slate-900/20 shadow-[0_25px_80px_rgba(8,15,40,0.65)] p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Создание отчёта для заказчика</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Проект</label>
-                <select 
-                  value={contractorReportForm.project}
-                  onChange={(e) => setContractorReportForm({...contractorReportForm, project: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Выберите проект</option>
-                  <option value="1">ЖК "Северная звезда"</option>
-                  <option value="2">Офисный центр "Технопарк"</option>
-                  <option value="3">Частный дом Иванова</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Заказчик</label>
-                <select 
-                  value={contractorReportForm.client}
-                  onChange={(e) => setContractorReportForm({...contractorReportForm, client: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Выберите заказчика</option>
-                  <option value="ООО Застройщик">ООО Застройщик</option>
-                  <option value="ИП Иванов">ИП Иванов</option>
-                  <option value="ЗАО ИнвестГрупп">ЗАО ИнвестГрупп</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Тип отчёта</label>
-                <select 
-                  value={contractorReportForm.type}
-                  onChange={(e) => setContractorReportForm({...contractorReportForm, type: e.target.value as any})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="daily">Ежедневный</option>
-                  <option value="weekly">Еженедельный</option>
-                  <option value="milestone">Этап</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Описание отчёта</label>
-                <textarea
-                  value={contractorReportForm.description}
-                  onChange={(e) => setContractorReportForm({...contractorReportForm, description: e.target.value})}
-                  placeholder="Опишите выполненные работы, прогресс, качество, планы на следующий период..."
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
-                ></textarea>
-              </div>
-              
-              <div className="flex space-x-2">
-                <label 
-                  className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2 cursor-pointer ${
-                    contractorReportForm.project && contractorReportForm.description.trim() && contractorReportForm.client
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  <Camera className="w-4 h-4" />
-                  <span>Добавить фото</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handlePhotoSelect}
-                    disabled={!contractorReportForm.project || !contractorReportForm.description.trim() || !contractorReportForm.client}
-                    className="hidden"
-                  />
-                </label>
-                <button 
-                  disabled={!contractorReportForm.project || !contractorReportForm.description.trim() || !contractorReportForm.client}
-                  onClick={handleCreateContractorReport}
-                  className={`flex-1 py-2 rounded-lg transition-colors ${
-                    contractorReportForm.project && contractorReportForm.description.trim() && contractorReportForm.client
-                      ? 'bg-green-600 hover:bg-green-700 text-white' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  Создать отчёт
-                </button>
-              </div>
-            </div>
-            
-            <div className={`border-2 border-dashed rounded-lg p-6 transition-colors ${
-              contractorReportForm.project && contractorReportForm.description.trim() && contractorReportForm.client
-                ? 'border-blue-400 hover:border-blue-500 bg-blue-50' 
-                : 'border-gray-300 bg-gray-50'
-            }`}>
-              {selectedPhotos.length > 0 ? (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Выбранные фотографии ({selectedPhotos.length})</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    {selectedPhotos.map((photo, index) => (
-                      <div key={index} className="relative">
-                        <img 
-                          src={photoPreviewUrls[index]} 
-                          alt={`Фото ${index + 1}`}
-                          className="w-full h-24 object-cover rounded-lg"
-                        />
-                        <button
-                          onClick={() => handleRemovePhoto(index)}
-                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <label className="mt-3 block text-center">
-                    <span className="text-blue-600 hover:text-blue-700 text-sm cursor-pointer">
-                      Добавить ещё фото
-                    </span>
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handlePhotoSelect}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              ) : (
-                <div className="text-center">
-                  <Camera className={`w-12 h-12 mx-auto mb-2 ${
-                    contractorReportForm.project && contractorReportForm.description.trim() && contractorReportForm.client ? 'text-blue-400' : 'text-gray-400'
-                  }`} />
-                  {contractorReportForm.project && contractorReportForm.description.trim() && contractorReportForm.client ? (
-                    <>
-                      <p className="text-blue-600 font-medium">Нажмите "Добавить фото" для выбора</p>
-                      <p className="text-xs text-blue-500 mt-1">PNG, JPG до 10MB</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-slate-600">Область загрузки файлов</p>
-                      <p className="text-xs text-gray-400 mt-1">Сначала заполните информацию об отчёте</p>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
       
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -589,67 +409,24 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
           <p className="text-slate-400 mt-1">Фото-отчёты и документооборот по проектам</p>
         </div>
         
-        {(userRole === 'worker' || userRole === 'foreman' || userRole === 'storekeeper' || userRole === 'technadzor' || userRole === 'contractor') ? (
           <div className="flex space-x-2">
-            {!isCreatingReport && !isCreatingWarehouseReport && !isCreatingTechnadzorReport && !isCreatingContractorReport ? (
-              <>
-                {userRole !== 'storekeeper' && userRole !== 'technadzor' && userRole !== 'contractor' && (
+          {!isCreatingReport ? (
                   <button 
                     onClick={() => setIsCreatingReport(true)}
-                    className="border border-emerald-500/30 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 px-4 py-2 rounded-xl flex items-center space-x-2 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>{userRole === 'foreman' ? 'Отчёт для подрядчика' : userRole === 'worker' ? 'Отчёт для прораба' : 'Создать отчёт'}</span>
-                  </button>
-                )}
-                {userRole === 'storekeeper' && (
-                  <button 
-                    onClick={() => setIsCreatingWarehouseReport(true)}
                     className="border border-blue-500/30 bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 px-4 py-2 rounded-xl flex items-center space-x-2 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Отчёт склада</span>
+                    <span>Создать отчёт</span>
                   </button>
-                )}
-                {userRole === 'technadzor' && (
-                  <button 
-                    onClick={() => setIsCreatingTechnadzorReport(true)}
-                    className="border border-purple-500/30 bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 px-4 py-2 rounded-xl flex items-center space-x-2 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Отчёт для подрядчика</span>
-                  </button>
-                )}
-                {userRole === 'contractor' && (
-                  <button 
-                    onClick={() => setIsCreatingContractorReport(true)}
-                    className="border border-indigo-500/30 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 px-4 py-2 rounded-xl flex items-center space-x-2 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Отчёт для заказчика</span>
-                  </button>
-                )}
-              </>
             ) : (
               <button 
-                onClick={
-                  isCreatingWarehouseReport ? handleCancelWarehouseReport : 
-                  isCreatingTechnadzorReport ? handleCancelTechnadzorReport : 
-                  isCreatingContractorReport ? handleCancelContractorReport :
-                  handleCancelReport
-                }
+              onClick={handleCancelReport}
                 className="border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 px-4 py-2 rounded-xl flex items-center space-x-2 transition-colors"
               >
                 <span>Отменить</span>
               </button>
             )}
           </div>
-        ) : (
-        <button className="border border-blue-500/30 bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 px-4 py-2 rounded-xl flex items-center space-x-2 transition-colors">
-          <Plus className="w-4 h-4" />
-          <span>Создать отчёт</span>
-        </button>
-        )}
       </div>
 
       {/* Filter Tabs */}
@@ -660,11 +437,11 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
             { value: 'daily', label: 'Ежедневные' },
             { value: 'weekly', label: 'Еженедельные' },
             { value: 'milestone', label: 'Этапы' },
-            ...(userRole === 'storekeeper' || userRole === 'contractor' ? [{ value: 'warehouse', label: 'Складские' }] : []),
-            ...(userRole === 'technadzor' || userRole === 'contractor' ? [{ value: 'technadzor', label: 'Технадзор' }] : []),
-            ...(userRole === 'contractor' || userRole === 'client' ? [{ value: 'contractor', label: 'Подрядчик' }] : []),
-            ...(userRole === 'foreman' || userRole === 'contractor' ? [{ value: 'foreman', label: 'Прораб' }] : []),
-            ...(userRole === 'worker' || userRole === 'foreman' ? [{ value: 'worker', label: 'Рабочий' }] : [])
+            { value: 'warehouse', label: 'Складские' },
+            { value: 'technadzor', label: 'Технадзор' },
+            { value: 'contractor', label: 'Подрядчик' },
+            { value: 'foreman', label: 'Прораб' },
+            { value: 'worker', label: 'Рабочий' }
           ].map((tab) => (
             <button
               key={tab.value}
@@ -779,57 +556,89 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
         ))}
       </div>
 
-      {/* Photo Upload Widget - для рабочего и прораба */}
-      {(userRole === 'worker' || userRole === 'foreman' || userRole === 'storekeeper' || userRole === 'technadzor') && isCreatingReport && (
-        <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900/80 via-slate-900/40 to-slate-900/20 shadow-[0_25px_80px_rgba(8,15,40,0.65)] p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Создание отчёта</h2>
+      {/* Форма создания обычного отчёта (модальное окно) */}
+      {isCreatingReport && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900/80 via-slate-900/40 to-slate-900/20 shadow-[0_25px_80px_rgba(8,15,40,0.65)] p-6">
+            <button
+              type="button"
+              onClick={handleCancelReport}
+              className="absolute right-4 top-4 rounded-lg px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-white"
+            >
+              ✕
+            </button>
+
+            <h2 className="text-xl font-bold text-white mb-6">Создание отчёта</h2>
         
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Проект</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Проект</label>
                 <select 
                   value={reportForm.project}
                   onChange={(e) => setReportForm({...reportForm, project: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Выберите проект</option>
-                  <option value="1">ЖК "Северная звезда"</option>
-                  <option value="2">Офисный центр "Технопарк"</option>
-                  <option value="3">Частный дом Иванова</option>
+                    disabled={loadingProjects}
+                    className="w-full px-3 py-2 border border-white/10 rounded-lg bg-white/5 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="" className="bg-slate-800 text-white">{loadingProjects ? 'Загрузка проектов...' : 'Выберите проект'}</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id} className="bg-slate-800 text-white">
+                        {project.name}
+                      </option>
+                    ))}
                 </select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Тип отчёта</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Получатель отчёта (необязательно)</label>
+                  <select 
+                    value={reportForm.recipient}
+                    onChange={(e) => setReportForm({...reportForm, recipient: e.target.value})}
+                    disabled={loadingUsers}
+                    className="w-full px-3 py-2 border border-white/10 rounded-lg bg-white/5 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="" className="bg-slate-800 text-white">{loadingUsers ? 'Загрузка пользователей...' : 'Не выбран (отчёт для всех)'}</option>
+                    {users.length === 0 && !loadingUsers && (
+                      <option value="" disabled className="bg-slate-800 text-white">Нет доступных пользователей</option>
+                    )}
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id} className="bg-slate-800 text-white">
+                        {user.full_name || user.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Тип отчёта</label>
                 <select 
                   value={reportForm.type}
-                  onChange={(e) => setReportForm({...reportForm, type: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => setReportForm({...reportForm, type: e.target.value as 'daily' | 'weekly' | 'milestone'})}
+                    className="w-full px-3 py-2 border border-white/10 rounded-lg bg-white/5 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
                 >
-                  <option value="daily">Ежедневный</option>
-                  <option value="weekly">Еженедельный</option>
-                  <option value="milestone">Этап</option>
+                  <option value="daily" className="bg-slate-800 text-white">Ежедневный</option>
+                  <option value="weekly" className="bg-slate-800 text-white">Еженедельный</option>
+                  <option value="milestone" className="bg-slate-800 text-white">Этап</option>
                 </select>
               </div>
             
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Описание работ</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Описание работ</label>
                 <textarea
                   value={reportForm.description}
                   onChange={(e) => setReportForm({...reportForm, description: e.target.value})}
                   placeholder="Опишите выполненные работы..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full px-3 py-2 border border-gray-700 rounded-lg bg-slate-900/60 text-white placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                 ></textarea>
               </div>
               
               <div className="flex space-x-2">
                 <label 
-                  className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2 cursor-pointer ${
+                    className={`flex-1 py-2 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 cursor-pointer font-medium ${
                     isFormValid 
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        ? 'bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 text-white shadow-md hover:shadow-lg' 
+                        : 'bg-slate-700/50 text-slate-400 cursor-not-allowed'
                   }`}
                 >
                   <Camera className="w-4 h-4" />
@@ -844,38 +653,38 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
                   />
                 </label>
                 <button 
-                  disabled={!isFormValid}
+                    disabled={!isFormValid || isCreating}
                   onClick={handleCreateReport}
-                  className={`flex-1 py-2 rounded-lg transition-colors ${
-                    isFormValid 
-                      ? 'bg-green-600 hover:bg-green-700 text-white' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  Сохранить отчёт
+                    className={`flex-1 py-2 rounded-lg transition-colors font-semibold ${
+                      isFormValid && !isCreating
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl' 
+                        : 'bg-slate-700/50 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {isCreating ? 'Создание...' : 'Создать отчёт'}
                 </button>
               </div>
             </div>
             
-            <div className={`border-2 border-dashed rounded-lg p-6 transition-colors ${
+              <div className={`border-2 border-dashed rounded-lg p-6 transition-all duration-200 ${
               isFormValid 
-                ? 'border-blue-400 hover:border-blue-500 bg-blue-50' 
-                : 'border-gray-300 bg-gray-50'
+                  ? 'border-blue-500/60 hover:border-blue-500 bg-gradient-to-br from-blue-500/20 via-blue-500/10 to-slate-900/40 hover:from-blue-500/30 hover:via-blue-500/20' 
+                  : 'border-slate-700/50 bg-slate-900/60'
             }`}>
               {selectedPhotos.length > 0 ? (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Выбранные фотографии ({selectedPhotos.length})</h4>
+                    <h4 className="text-sm font-medium text-slate-300 mb-3">Выбранные фотографии ({selectedPhotos.length})</h4>
                   <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                     {photoPreviewUrls.map((url, index) => (
                       <div key={index} className="relative">
                         <img 
                           src={url} 
                           alt={`Фото ${index + 1}`}
-                          className="w-full h-20 object-cover rounded-lg"
+                            className="w-full h-24 object-cover rounded-lg border border-gray-700"
                         />
                         <button
                           onClick={() => handleRemovePhoto(index)}
-                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
                         >
                           ×
                         </button>
@@ -883,7 +692,7 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
                     ))}
                   </div>
                   <label className="mt-3 block text-center">
-                    <span className="text-blue-600 hover:text-blue-700 text-sm cursor-pointer">
+                      <span className="text-blue-400 hover:text-blue-300 text-sm cursor-pointer">
                       Добавить ещё фото
                     </span>
                     <input
@@ -898,288 +707,27 @@ const ReportsViewWithAPI: React.FC<ReportsViewProps> = ({ userRole }) => {
               ) : (
                 <div className="text-center">
                   <Camera className={`w-12 h-12 mx-auto mb-2 ${
-                    isFormValid ? 'text-blue-400' : 'text-gray-400'
+                      isFormValid ? 'text-blue-400' : 'text-gray-600'
                   }`} />
                   {isFormValid ? (
                     <>
-                      <p className="text-blue-600 font-medium">Нажмите "Добавить фото" для выбора</p>
-                      <p className="text-xs text-blue-500 mt-1">PNG, JPG до 10MB</p>
+                        <p className="text-blue-300 font-medium">Нажмите «Добавить фото» для выбора</p>
+                        <p className="text-xs text-blue-400 mt-1">PNG, JPG до 10MB</p>
                     </>
                   ) : (
                     <>
-                      <p className="text-slate-600">Область загрузки файлов</p>
-                      <p className="text-xs text-gray-400 mt-1">Сначала заполните информацию об отчёте</p>
+                        <p className="text-slate-400">Область загрузки файлов</p>
+                        <p className="text-xs text-slate-500 mt-1">Сначала заполните информацию об отчёте</p>
                     </>
                   )}
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Форма создания складского отчета */}
-      {isCreatingWarehouseReport && (
-        <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900/80 via-slate-900/40 to-slate-900/20 shadow-[0_25px_80px_rgba(8,15,40,0.65)] p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Создание отчёта о состоянии склада</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Название отчёта</label>
-                <input
-                  type="text"
-                  value={warehouseReportForm.title}
-                  onChange={(e) => setWarehouseReportForm({...warehouseReportForm, title: e.target.value})}
-                  placeholder="Например: Отчёт о состоянии склада на 25.08.2025"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Общее описание состояния склада</label>
-                <textarea
-                  value={warehouseReportForm.description}
-                  onChange={(e) => setWarehouseReportForm({...warehouseReportForm, description: e.target.value})}
-                  placeholder="Опишите общее состояние склада, основные изменения..."
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
-                ></textarea>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Критически важные позиции</label>
-                <textarea
-                  value={warehouseReportForm.criticalItems}
-                  onChange={(e) => setWarehouseReportForm({...warehouseReportForm, criticalItems: e.target.value})}
-                  placeholder="Укажите материалы с критически низким запасом..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
-                ></textarea>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Рекомендации для подрядчиков</label>
-                <textarea
-                  value={warehouseReportForm.recommendations}
-                  onChange={(e) => setWarehouseReportForm({...warehouseReportForm, recommendations: e.target.value})}
-                  placeholder="Рекомендации по закупкам, планированию..."
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
-                ></textarea>
-              </div>
-              
-              <div className="flex space-x-2">
-                <label className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2 cursor-pointer ${
-                  warehouseReportForm.title.trim() && warehouseReportForm.description.trim()
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}>
-                  <Camera className="w-4 h-4" />
-                  <span>Добавить фото</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handlePhotoSelect}
-                    disabled={!warehouseReportForm.title.trim() || !warehouseReportForm.description.trim()}
-                    className="hidden"
-                  />
-                </label>
-                <button 
-                  disabled={!warehouseReportForm.title.trim() || !warehouseReportForm.description.trim()}
-                  onClick={handleCreateWarehouseReport}
-                  className={`flex-1 py-2 rounded-lg transition-colors ${
-                    warehouseReportForm.title.trim() && warehouseReportForm.description.trim()
-                      ? 'bg-green-600 hover:bg-green-700 text-white' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  Создать отчёт
-                </button>
-              </div>
-              
-              {selectedPhotos.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Выбранные фотографии ({selectedPhotos.length})</h4>
-                  <div className="grid grid-cols-3 gap-2 max-h-32 overflow-y-auto">
-                    {photoPreviewUrls.map((url, index) => (
-                      <div key={index} className="relative">
-                        <img 
-                          src={url} 
-                          alt={`Фото ${index + 1}`}
-                          className="w-full h-16 object-cover rounded-lg"
-                        />
-                        <button
-                          onClick={() => handleRemovePhoto(index)}
-                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs hover:bg-red-600"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Форма создания отчета технадзора для подрядчика */}
-      {isCreatingTechnadzorReport && (
-        <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900/80 via-slate-900/40 to-slate-900/20 shadow-[0_25px_80px_rgba(8,15,40,0.65)] p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Создание отчёта для подрядчика</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Проект</label>
-                <select 
-                  value={technadzorReportForm.project}
-                  onChange={(e) => setTechnadzorReportForm({...technadzorReportForm, project: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Выберите проект</option>
-                  <option value="1">ЖК "Северная звезда"</option>
-                  <option value="2">Офисный центр "Технопарк"</option>
-                  <option value="3">Частный дом Иванова</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Подрядчик</label>
-                <select 
-                  value={technadzorReportForm.contractor}
-                  onChange={(e) => setTechnadzorReportForm({...technadzorReportForm, contractor: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Выберите подрядчика</option>
-                  <option value="ООО СтройМонтаж">ООО СтройМонтаж</option>
-                  <option value="ИП Петров">ИП Петров</option>
-                  <option value="ЗАО СтройГрупп">ЗАО СтройГрупп</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Тип отчёта</label>
-                <select 
-                  value={technadzorReportForm.type}
-                  onChange={(e) => setTechnadzorReportForm({...technadzorReportForm, type: e.target.value as any})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="daily">Ежедневный</option>
-                  <option value="weekly">Еженедельный</option>
-                  <option value="milestone">Этап</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Описание отчёта</label>
-                <textarea
-                  value={technadzorReportForm.description}
-                  onChange={(e) => setTechnadzorReportForm({...technadzorReportForm, description: e.target.value})}
-                  placeholder="Опишите результаты проверки, выявленные проблемы, рекомендации..."
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
-                ></textarea>
-              </div>
-              
-              <div className="flex space-x-2">
-                <label 
-                  className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2 cursor-pointer ${
-                    technadzorReportForm.project && technadzorReportForm.description.trim() && technadzorReportForm.contractor
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  <Camera className="w-4 h-4" />
-                  <span>Добавить фото</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handlePhotoSelect}
-                    disabled={!technadzorReportForm.project || !technadzorReportForm.description.trim() || !technadzorReportForm.contractor}
-                    className="hidden"
-                  />
-                </label>
-                <button 
-                  disabled={!technadzorReportForm.project || !technadzorReportForm.description.trim() || !technadzorReportForm.contractor}
-                  onClick={handleCreateTechnadzorReport}
-                  className={`flex-1 py-2 rounded-lg transition-colors ${
-                    technadzorReportForm.project && technadzorReportForm.description.trim() && technadzorReportForm.contractor
-                      ? 'bg-green-600 hover:bg-green-700 text-white' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  Создать отчёт
-                </button>
-              </div>
-            </div>
-            
-            <div className={`border-2 border-dashed rounded-lg p-6 transition-colors ${
-              technadzorReportForm.project && technadzorReportForm.description.trim() && technadzorReportForm.contractor
-                ? 'border-blue-400 hover:border-blue-500 bg-blue-50' 
-                : 'border-gray-300 bg-gray-50'
-            }`}>
-              {selectedPhotos.length > 0 ? (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Выбранные фотографии ({selectedPhotos.length})</h4>
-                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                    {photoPreviewUrls.map((url, index) => (
-                      <div key={index} className="relative">
-                        <img 
-                          src={url} 
-                          alt={`Фото ${index + 1}`}
-                          className="w-full h-20 object-cover rounded-lg"
-                        />
-                        <button
-                          onClick={() => handleRemovePhoto(index)}
-                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <label className="mt-3 block text-center">
-                    <span className="text-blue-600 hover:text-blue-700 text-sm cursor-pointer">
-                      Добавить ещё фото
-                    </span>
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handlePhotoSelect}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              ) : (
-                <div className="text-center">
-                  <Camera className={`w-12 h-12 mx-auto mb-2 ${
-                    technadzorReportForm.project && technadzorReportForm.description.trim() && technadzorReportForm.contractor ? 'text-blue-400' : 'text-gray-400'
-                  }`} />
-                  {technadzorReportForm.project && technadzorReportForm.description.trim() && technadzorReportForm.contractor ? (
-                    <>
-                      <p className="text-blue-600 font-medium">Нажмите "Добавить фото" для выбора</p>
-                      <p className="text-xs text-blue-500 mt-1">PNG, JPG до 10MB</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-slate-600">Область загрузки файлов</p>
-                      <p className="text-xs text-gray-400 mt-1">Сначала заполните информацию об отчёте</p>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {filteredReports.length === 0 && (
         <div className="text-center py-12">

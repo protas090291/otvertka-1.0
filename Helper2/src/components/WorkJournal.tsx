@@ -400,9 +400,9 @@ const WorkJournal: React.FC<WorkJournalProps> = ({ userRole }) => {
               onChange={(e) => setTaskFilter(e.target.value)}
               className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/30"
             >
-              <option value="">Все задачи</option>
+              <option value="" className="bg-slate-800 text-white">Все задачи</option>
               {getUniqueTasks().map(task => (
-                <option key={task} value={task}>{task}</option>
+                <option key={task} value={task} className="bg-slate-800 text-white">{task}</option>
               ))}
             </select>
 
@@ -412,9 +412,9 @@ const WorkJournal: React.FC<WorkJournalProps> = ({ userRole }) => {
               onChange={(e) => setApartmentFilter(e.target.value)}
               className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-blue-500/50"
             >
-              <option value="">Все квартиры</option>
+              <option value="" className="bg-slate-800 text-white">Все квартиры</option>
               {getUniqueApartments().map(apartment => (
-                <option key={apartment} value={apartment}>{apartment}</option>
+                <option key={apartment} value={apartment} className="bg-slate-800 text-white">{apartment}</option>
               ))}
             </select>
           </div>

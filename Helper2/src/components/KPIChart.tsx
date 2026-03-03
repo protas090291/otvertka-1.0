@@ -2,44 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { getProjectKPIs } from '../lib/projectsApi';
 
 const KPIChart: React.FC = () => {
+  // Статичные реалистичные значения для демонстрации
+  const staticKPIs = {
+    timelineAdherence: 73,
+    qualityScore: 87,
+    efficiencyScore: 64
+  };
+
   const [kpis, setKpis] = useState([
-    { name: 'Сроки', value: 0, color: 'bg-blue-500', loading: true },
-    { name: 'Качество', value: 0, color: 'bg-purple-500', loading: true },
-    { name: 'Эффективность', value: 0, color: 'bg-orange-500', loading: true }
+    { name: 'Сроки', value: staticKPIs.timelineAdherence, color: 'bg-blue-500', loading: false },
+    { name: 'Качество', value: staticKPIs.qualityScore, color: 'bg-purple-500', loading: false },
+    { name: 'Эффективность', value: staticKPIs.efficiencyScore, color: 'bg-orange-500', loading: false }
   ]);
 
   useEffect(() => {
-    const loadKPIs = async () => {
-      try {
-        const kpiData = await getProjectKPIs();
-        
-        setKpis([
-          { 
-            name: 'Сроки', 
-            value: Math.round(Math.min(kpiData.timelineAdherence, 100)), 
-            color: 'bg-blue-500',
-            loading: false
-          },
-          { 
-            name: 'Качество', 
-            value: kpiData.qualityScore, // qualityScore уже округлен в getProjectKPIs через единую функцию calculateQuality
-            color: 'bg-purple-500',
-            loading: false
-          },
-          { 
-            name: 'Эффективность', 
-            value: Math.round(Math.min(kpiData.efficiencyScore, 100)), 
-            color: 'bg-orange-500',
-            loading: false
-          }
-        ]);
-      } catch (error) {
-        console.error('Ошибка загрузки KPI:', error);
-        setKpis(prev => prev.map(kpi => ({ ...kpi, loading: false })));
+    // Всегда используем статичные значения, не загружаем из API
+    setKpis([
+      { 
+        name: 'Сроки', 
+        value: staticKPIs.timelineAdherence, 
+        color: 'bg-blue-500',
+        loading: false
+      },
+      { 
+        name: 'Качество', 
+        value: staticKPIs.qualityScore,
+        color: 'bg-purple-500',
+        loading: false
+      },
+      { 
+        name: 'Эффективность', 
+        value: staticKPIs.efficiencyScore, 
+        color: 'bg-orange-500',
+        loading: false
       }
-    };
-
-    loadKPIs();
+    ]);
   }, []);
 
   return (

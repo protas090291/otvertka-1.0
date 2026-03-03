@@ -1,13 +1,18 @@
 /**
- * API функции для работы с Яндекс Диском
+ * API функции для работы с Яндекс Диском через локальный бэкэнд
  * Только чтение и скачивание файлов
+ * Работает с бэкэндом на localhost:8000 (для разработки)
+ * После деплоя на TimeWeb замените BACKEND_API_URL на ваш домен
  */
 
-const YANDEX_DISK_API_URL = 'http://localhost:8000/api/yandex-disk';
+// Используем локальный бэкэнд для Яндекс Диска
+// После деплоя на TimeWeb замените на: 'https://ваш-домен.timeweb.ru/api/yandex-disk'
+const BACKEND_API_URL = 'http://localhost:8000/api/yandex-disk';
 
 export interface YandexDiskFile {
   name: string;
-  path: string;
+  path: string;  // Полный путь для отображения
+  relativePath?: string;  // Относительный путь от корня публичной папки (для API запросов)
   type: 'file' | 'dir';
   size: number;
   size_formatted: string;
@@ -29,53 +34,87 @@ export interface YandexDiskFilesResponse {
   public_key?: string;  // Публичный ключ папки
 }
 
+// Вспомогательные функции форматирования
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
+}
+
+function formatDate(dateString?: string): string {
+  if (!dateString) return '';
+  try {
+    return new Date(dateString).toLocaleString('ru-RU');
+  } catch {
+    return dateString;
+  }
+}
+
 /**
- * Получить список файлов из папки на Яндекс Диске
+ * Получить список файлов из папки на Яндекс Диске через бэкэнд
  * С автоматическими повторными попытками при временных ошибках
  */
 export const getYandexDiskFiles = async (folderPath?: string, retries: number = 2): Promise<YandexDiskFilesResponse> => {
-  const url = folderPath 
-    ? `${YANDEX_DISK_API_URL}/files?folder_path=${encodeURIComponent(folderPath)}`
-    : `${YANDEX_DISK_API_URL}/files`;
+  const url = `${BACKEND_API_URL}/files${folderPath ? `?folder_path=${encodeURIComponent(folderPath)}` : ''}`;
   
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      // Добавляем timeout для запроса (увеличено до 60 секунд для больших папок)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 секунд
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 секунд
       
       try {
         const response = await fetch(url, {
           signal: controller.signal,
           headers: {
-            'Accept': 'application/json',
-          }
+            'Content-Type': 'application/json',
+          },
         });
         
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-          const error = await response.json().catch(() => ({ detail: 'Ошибка получения файлов' }));
-          throw new Error(error.detail || `Ошибка ${response.status}`);
+          const error = await response.json().catch(() => ({ error: 'Ошибка получения файлов' }));
+          throw new Error(error.error || error.detail || `Ошибка ${response.status}`);
         }
         
         const data = await response.json();
-        return data;
+        
+        // Форматируем данные для совместимости с существующим интерфейсом
+        return {
+          files: (data.files || []).map((file: any) => ({
+            ...file,
+            size_formatted: formatFileSize(file.size || 0),
+            modified_formatted: formatDate(file.modified),
+            created_formatted: formatDate(file.created),
+          })),
+          total: data.total || 0,
+          folder_path: data.folder_path || folderPath || '/',
+          is_public: data.is_public || false,
+          public_key: data.public_key,
+        };
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
+        
         if (fetchError.name === 'AbortError') {
           if (attempt < retries) {
-            // Ждем перед повторной попыткой
-            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+            await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
             continue;
           }
           throw new Error('Превышено время ожидания ответа от сервера. Попробуйте обновить страницу или проверить подключение к интернету.');
         }
-        // Для других ошибок тоже делаем повторную попытку, если это не последняя
-        if (attempt < retries && (fetchError.message?.includes('network') || fetchError.message?.includes('Failed to fetch'))) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        
+        // Повторная попытка при сетевых ошибках
+        if (attempt < retries && (
+          fetchError.message?.includes('network') ||
+          fetchError.message?.includes('Failed to fetch') ||
+          fetchError.message?.includes('ECONNREFUSED')
+        )) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
           continue;
         }
+        
         throw fetchError;
       }
     } catch (error) {
@@ -90,68 +129,45 @@ export const getYandexDiskFiles = async (folderPath?: string, retries: number = 
 };
 
 /**
- * Скачать файл с Яндекс Диска
+ * Получить прямую ссылку для скачивания файла через бэкэнд
  */
-export const downloadFromYandexDisk = async (filePath: string, fileName?: string): Promise<void> => {
-  try {
-    const url = `${YANDEX_DISK_API_URL}/download?file_path=${encodeURIComponent(filePath)}`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Ошибка скачивания файла' }));
-      throw new Error(error.detail || `Ошибка ${response.status}`);
-    }
-    
-    // Получаем имя файла из заголовка или используем переданное
-    const contentDisposition = response.headers.get('Content-Disposition');
-    let downloadFileName = fileName;
-    
-    if (contentDisposition) {
-      const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
-      if (fileNameMatch) {
-        downloadFileName = fileNameMatch[1];
-      }
-    }
-    
-    if (!downloadFileName) {
-      downloadFileName = filePath.split('/').pop() || 'file';
-    }
-    
-    // Создаем blob и скачиваем
-    const blob = await response.blob();
-    const url_blob = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url_blob;
-    a.download = downloadFileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url_blob);
-  } catch (error) {
-    console.error('Ошибка скачивания файла из Яндекс Диска:', error);
-    throw error;
+export const getYandexDiskDownloadLink = async (filePath: string): Promise<string> => {
+  const url = `${BACKEND_API_URL}/download-link?file_path=${encodeURIComponent(filePath)}`;
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Ошибка получения ссылки' }));
+    throw new Error(error.error || error.detail || `Ошибка ${response.status}`);
   }
+  
+  const data = await response.json();
+  return data.download_url;
 };
 
 /**
- * Получить прямую ссылку для скачивания файла
+ * Скачать файл с Яндекс Диска через бэкэнд
  */
-export const getYandexDiskDownloadLink = async (filePath: string): Promise<string> => {
+export const downloadFromYandexDisk = async (filePath: string, fileName?: string): Promise<void> => {
   try {
-    const url = `${YANDEX_DISK_API_URL}/download-link?file_path=${encodeURIComponent(filePath)}`;
+    // Получаем ссылку для скачивания через бэкэнд
+    const downloadUrl = await getYandexDiskDownloadLink(filePath);
     
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Ошибка получения ссылки' }));
-      throw new Error(error.detail || `Ошибка ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data.download_url;
+    // Используем прямую ссылку для скачивания
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fileName || filePath.split('/').pop() || 'file';
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   } catch (error) {
-    console.error('Ошибка получения ссылки для скачивания:', error);
+    console.error('Ошибка скачивания файла из Яндекс Диска:', error);
     throw error;
   }
 };
@@ -164,27 +180,23 @@ export const refreshYandexDiskFiles = async (folderPath?: string): Promise<Yande
 };
 
 /**
- * Получить ссылку для просмотра файла (открытие в браузере вместо скачивания)
+ * Получить ссылку для просмотра файла через бэкэнд (открытие в браузере вместо скачивания)
  */
 export const getYandexDiskViewLink = async (filePath: string): Promise<string> => {
-  try {
-    const url = `${YANDEX_DISK_API_URL}/view-link?file_path=${encodeURIComponent(filePath)}`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Ошибка получения ссылки для просмотра' }));
-      throw new Error(error.detail || `Ошибка ${response.status}`);
-    }
-    
-    const data = await response.json();
-    // Возвращаем полный URL от backend
-    return data.view_url;
-  } catch (error) {
-    console.error('Ошибка получения ссылки для просмотра:', error);
-    throw error;
+  const url = `${BACKEND_API_URL}/view-link?file_path=${encodeURIComponent(filePath)}`;
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Ошибка получения ссылки для просмотра' }));
+    throw new Error(error.error || error.detail || `Ошибка ${response.status}`);
   }
+  
+  const data = await response.json();
+  return data.view_url;
 };
-
-
-

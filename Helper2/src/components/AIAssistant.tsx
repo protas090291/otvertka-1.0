@@ -17,7 +17,6 @@ import {
   Search
 } from 'lucide-react';
 import { UserRole } from '../types';
-import AnimatedVoiceAssistant from './AnimatedVoiceAssistant';
 import DefectTester from './DefectTester';
 import { sendToAI, analyzeUserCommand, generateDocumentContent } from '../lib/aiApi';
 import { askConstructionAssistant } from '../lib/systemControlApi';
@@ -548,39 +547,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ userRole }) => {
         </div>
       )}
 
-      {/* Анимированная кнопка голосового помощника */}
-      <div className="relative">
-        <div className={`${isExpanded ? 'mb-4' : ''}`}>
-          <AnimatedVoiceAssistant
-            isListening={isListening}
-            isProcessing={isProcessing}
-            onClick={isListening ? stopListening : startListening}
-            className="w-24 h-24"
-          />
-        </div>
-
-        {/* Индикатор статуса */}
-        {!isExpanded && messages.length > 0 && (
-          <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center z-10 animate-pulse">
-            <span className="text-xs text-white font-bold">{messages.length}</span>
-          </div>
-        )}
-
-        {/* Индикатор состояния записи */}
-        {isListening && (
-          <div className="absolute -top-2 -left-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center z-10 animate-pulse">
-            <div className="w-3 h-3 bg-white rounded-full"></div>
-          </div>
-        )}
-
-        {/* Индикатор обработки */}
-        {isProcessing && (
-          <div className="absolute -top-2 -left-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center z-10">
-            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-
-        {/* Кнопка развернуть */}
+      {/* Кнопка развернуть */}
         {!isExpanded && (
           <div
             id="chat-toggle-button-new"
@@ -610,7 +577,6 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ userRole }) => {
             </svg>
           </div>
         )}
-      </div>
 
       {/* Тестер дефектов */}
       {showDefectTester && (

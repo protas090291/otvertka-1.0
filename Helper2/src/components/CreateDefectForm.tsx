@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Camera, Upload, X, MapPin } from 'lucide-react';
 import { createDefect, uploadDefectPhoto, updateDefect } from '../lib/hybridDefectsApi';
+import { getCurrentUser } from '../lib/authApi';
 
 interface CreateDefectFormProps {
   apartmentId: string;
@@ -93,6 +94,8 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
       }
 
       console.log('Дефект успешно создан:', newDefect);
+      
+      
       onSuccess();
       onClose();
     } catch (error) {
@@ -104,15 +107,15 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-slate-900 rounded-2xl shadow-xl border border-white/10 max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white">
             Создание дефекта
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-slate-600 transition-colors"
+            className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -120,9 +123,9 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Информация о местоположении */}
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <div className="flex items-center space-x-2 text-sm text-slate-600">
-              <MapPin className="w-4 h-4" />
+          <div className="bg-white/5 border border-white/10 p-3 rounded-lg">
+            <div className="flex items-center space-x-2 text-sm text-slate-300">
+              <MapPin className="w-4 h-4 text-emerald-400" />
               <span>Квартира {apartmentId}</span>
               <span>•</span>
               <span>Координаты: {xCoord.toFixed(1)}%, {yCoord.toFixed(1)}%</span>
@@ -131,7 +134,7 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
 
           {/* Название дефекта */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Название дефекта *
             </label>
             <input
@@ -140,14 +143,14 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
               value={formData.title}
               onChange={handleInputChange}
               placeholder="Краткое описание проблемы"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
               required
             />
           </div>
 
           {/* Описание */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Описание
             </label>
             <textarea
@@ -156,29 +159,29 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
               onChange={handleInputChange}
               placeholder="Подробное описание дефекта..."
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 resize-none transition-all"
             />
           </div>
 
           {/* Статус */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Статус
             </label>
             <select
               name="status"
               value={formData.status}
               onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
             >
-              <option value="active">Активный</option>
-              <option value="fixed">Исправлен</option>
+              <option value="active" className="bg-slate-800">Активный</option>
+              <option value="fixed" className="bg-slate-800">Исправлен</option>
             </select>
           </div>
 
           {/* Загрузка фото */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Фотография
             </label>
             
@@ -187,24 +190,24 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
                 <img
                   src={photoPreview}
                   alt="Предпросмотр"
-                  className="w-full h-48 object-cover rounded-lg"
+                  className="w-full h-48 object-cover rounded-lg border border-white/10"
                 />
                 <button
                   type="button"
                   onClick={handleRemovePhoto}
-                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-colors shadow-lg"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-white/20 border-dashed rounded-lg cursor-pointer bg-white/5 hover:bg-white/10 transition-colors">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <Camera className="w-8 h-8 mb-2 text-gray-400" />
-                  <p className="mb-2 text-sm text-gray-500">
+                  <Camera className="w-8 h-8 mb-2 text-slate-400" />
+                  <p className="mb-2 text-sm text-slate-300">
                     <span className="font-semibold">Нажмите для загрузки</span> или перетащите фото
                   </p>
-                  <p className="text-xs text-gray-500">PNG, JPG до 10MB</p>
+                  <p className="text-xs text-slate-400">PNG, JPG до 10MB</p>
                 </div>
                 <input
                   type="file"
@@ -218,8 +221,8 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
 
           {/* Ошибка */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3">
+              <p className="text-sm text-red-300">{error}</p>
             </div>
           )}
 
@@ -228,17 +231,17 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2.5 border border-white/10 text-slate-300 rounded-lg hover:bg-white/10 transition-colors font-medium"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={isSubmitting || !formData.title.trim()}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center ${
+              className={`flex-1 px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center font-medium ${
                 isSubmitting || !formData.title.trim()
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
               }`}
             >
               {isSubmitting ? (

@@ -840,8 +840,28 @@ const ScheduleViewWithAPI: React.FC<ScheduleViewWithAPIProps> = ({ userRole }) =
         assignedToUserId: taskForm.assigneeUserId || undefined
       };
 
+      console.log('🔍 Отладка создания задачи:', {
+        taskForm: {
+          assigneeUserId: taskForm.assigneeUserId,
+          assignee: taskForm.assignee,
+          name: taskForm.name
+        },
+        currentUser: currentUser ? { id: currentUser.id, email: currentUser.email } : null,
+        assignableUsers: assignableUsers.map(u => ({ id: u.id, email: u.email, full_name: u.full_name }))
+      });
+
       const createdTask = await createTask(newTaskData);
       if (createdTask) {
+        // Сохраняем данные для уведомления ДО сброса формы
+        const assigneeUserIdForNotification = taskForm.assigneeUserId;
+        const taskNameForNotification = taskForm.name;
+        
+        console.log('🔍 После создания задачи:', {
+          assigneeUserIdForNotification,
+          taskNameForNotification,
+          currentUserId: currentUser?.id
+        });
+        
         setTasks(prevTasks => [createdTask, ...prevTasks]);
         if (userRole === 'foreman') {
           setForemanCreatedTasks(prev => new Set([...prev, createdTask.id]));
@@ -859,6 +879,80 @@ const ScheduleViewWithAPI: React.FC<ScheduleViewWithAPIProps> = ({ userRole }) =
         
         // Закрытие формы создания
         setIsCreatingTask(false);
+        
+        // Создаём уведомление для исполнителя (если задача назначена)
+        console.log('🔍 Проверка условий для создания уведомления:', {
+          assigneeUserIdForNotification,
+          hasAssignee: !!assigneeUserIdForNotification,
+          currentUser: currentUser ? { id: currentUser.id, email: currentUser.email } : null,
+          hasCurrentUser: !!currentUser,
+          assignableUsersCount: assignableUsers.length
+        });
+        
+        if (assigneeUserIdForNotification && currentUser) {
+          try {
+            console.log('📤 Создание уведомления о задаче...', {
+              assigneeUserId: assigneeUserIdForNotification,
+              taskName: taskNameForNotification,
+              creatorId: currentUser.id,
+              creatorEmail: currentUser.email
+            });
+            
+            const { createNotification } = await import('../lib/notificationsApi');
+            const assigneeUser = assignableUsers.find(u => u.id === assigneeUserIdForNotification);
+            const assigneeName = assigneeUser?.full_name || assigneeUser?.email || 'Пользователь';
+            
+            console.log('🔍 Найденный исполнитель:', {
+              assigneeUser: assigneeUser ? { id: assigneeUser.id, email: assigneeUser.email, full_name: assigneeUser.full_name } : null,
+              assigneeName,
+              allAssignableUsers: assignableUsers.map(u => ({ id: u.id, email: u.email }))
+            });
+            
+            if (!assigneeUser) {
+              console.error('❌ Исполнитель не найден в списке assignableUsers!');
+              console.error('🔍 Ищем по ID:', assigneeUserIdForNotification);
+              console.error('🔍 Доступные пользователи:', assignableUsers.map(u => u.id));
+            }
+            
+            const creatorName = currentUser.full_name || currentUser.email || 'Пользователь';
+            
+            console.log('📝 Данные для создания уведомления:', {
+              type: 'task',
+              title: 'Новая задача назначена',
+              message: `${creatorName} назначил вам задачу: "${taskNameForNotification}"`,
+              recipientId: assigneeUserIdForNotification,
+              persistent: true,
+              createdBy: currentUser.id
+            });
+            
+            const success = await createNotification({
+              type: 'task',
+              title: 'Новая задача назначена',
+              message: `${creatorName} назначил вам задачу: "${taskNameForNotification}"`,
+              recipientId: assigneeUserIdForNotification,
+              persistent: true, // Постоянное уведомление
+              createdBy: currentUser.id
+            });
+            
+            if (success) {
+              console.log('✅ Уведомление о задаче успешно создано для:', assigneeName, 'ID:', assigneeUserIdForNotification);
+            } else {
+              console.error('❌ Не удалось создать уведомление о задаче (createNotification вернул false)');
+            }
+          } catch (error) {
+            console.error('❌ Ошибка создания уведомления о задаче:', error);
+            console.error('❌ Детали ошибки:', error instanceof Error ? error.message : String(error));
+          }
+        } else {
+          console.log('⚠️ Уведомление не создано - условия не выполнены:', {
+            hasAssignee: !!assigneeUserIdForNotification,
+            hasCurrentUser: !!currentUser,
+            assigneeUserId: assigneeUserIdForNotification,
+            currentUserId: currentUser?.id,
+            assigneeUserIdType: typeof assigneeUserIdForNotification,
+            assigneeUserIdLength: assigneeUserIdForNotification?.length
+          });
+        }
         
         // Показываем уведомление
         setNotificationMessage('Задача успешно создана!');
@@ -1603,9 +1697,9 @@ const ScheduleViewWithAPI: React.FC<ScheduleViewWithAPIProps> = ({ userRole }) =
                   onChange={(e) => setTaskForm({...taskForm, project: e.target.value})}
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/30"
                 >
-                  <option value="">Выберите проект</option>
+                  <option value="" className="bg-slate-800 text-white">Выберите проект</option>
                   {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
+                    <option key={project.id} value={project.id} className="bg-slate-800 text-white">
                       {project.name}
                     </option>
                   ))}
@@ -1638,9 +1732,9 @@ const ScheduleViewWithAPI: React.FC<ScheduleViewWithAPIProps> = ({ userRole }) =
                   }}
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/30"
                 >
-                  <option value="">Выберите пользователя</option>
+                  <option value="" className="bg-slate-800 text-white">Выберите пользователя</option>
                   {assignableUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
+                    <option key={u.id} value={u.id} className="bg-slate-800 text-white">
                       {u.full_name || u.email} {u.email ? `(${u.email})` : ''}
                     </option>
                   ))}
@@ -1654,10 +1748,10 @@ const ScheduleViewWithAPI: React.FC<ScheduleViewWithAPIProps> = ({ userRole }) =
                   onChange={(e) => setTaskForm({...taskForm, status: e.target.value as any})}
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/30"
                 >
-                  <option value="pending">Ожидание</option>
-                  <option value="in-progress">В работе</option>
-                  <option value="completed">Завершено</option>
-                  <option value="delayed">Просрочено</option>
+                  <option value="pending" className="bg-slate-800 text-white">Ожидание</option>
+                  <option value="in-progress" className="bg-slate-800 text-white">В работе</option>
+                  <option value="completed" className="bg-slate-800 text-white">Завершено</option>
+                  <option value="delayed" className="bg-slate-800 text-white">Просрочено</option>
                 </select>
               </div>
             </div>

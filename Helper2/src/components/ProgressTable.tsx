@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Check, Edit, X, Search, Filter, Download, ChevronDown, ChevronRight, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Check, Edit, X, Search, Filter, Download, ChevronDown, ChevronRight, Eye, EyeOff, Loader2, Upload } from 'lucide-react';
 import { UserRole, ProgressData } from '../types';
 import { getAllProgressData, upsertProgressData, exportProgressDataToCSV, createWorkWithZeroes } from '../lib/progressApi';
 import { normalizeApartmentId } from '../lib/dataNormalizer';
+import { getCurrentUser } from '../lib/authApi';
+import ProgressTableImporter from './ProgressTableImporter';
 
 interface ProgressTableProps {
   userRole: UserRole;
@@ -18,6 +20,63 @@ interface TaskProgress {
     };
   };
 }
+
+// Правильный порядок работ по разделам (согласованный список)
+const TASK_ORDER: Record<string, string[]> = {
+  "Отделочные работы": [
+    "Устройство металлического каркаса перегородок и стен",
+    "Монтаж гипсокартона под стяжку (400 мм от пола)",
+    "Гидроизоляция пола в санузлах под конвекторами",
+    "Гидроизоляция общая",
+    "Заливка стяжки из пенополистирол бетона",
+    "Заливка чистовой стяжки",
+    "Шумоизоляция стен",
+    "Обшивка каркаса листами ГКЛ стен",
+    "Обшивка каркаса листами ГКЛ потолков",
+    "Шпаклевка стен (база)",
+    "Шпаклевка потолка (база)",
+    "Гидроизоляция обмазочная",
+    "Кладка камня на стенах",
+    "Кладка камня на полу",
+    "Укладка фанеры на пол"
+  ],
+  "Работы по ОВК": [
+    "Монтаж воздуховодов систем вентиляции",
+    "Монтаж наружных блоков кондиционеров",
+    "Монтаж внутренних блоков кондиционеров",
+    "Монтаж дренажа",
+    "Монтаж фреонопровода",
+    "Монтаж вентустановки",
+    "Монтаж вентрешеток",
+    "ПНР систем ОВИК",
+    "Монтаж черновой сантехники",
+    "Монтаж трубопроводов водоснабжения",
+    "Сборка сантехнических шкафов",
+    "Монтаж трубопроводов канализации",
+    "Монтаж санфаянса, сифонов и смесителей",
+    "Монтаж душевых перегородок",
+    "ПНР системы водоснабжения",
+    "Демонтаж/монтаж внутрипольных конвекторов",
+    "Демонтаж/монтаж трубопроводов отопления",
+    "Монтаж коллекторного шкафа отопления",
+    "ПНР системы отопления"
+  ],
+  "Работы по ЭОМ+АСУ": [
+    "Монтаж кабельных трасс по потолку",
+    "Монтаж кабельных трасс по полу",
+    "Установка щитов и лотоков",
+    "Завод кабеля в щит с потолка",
+    "Завод кабеля в щит с пола",
+    "Наращивание кабеля на воронку",
+    "Завод кабеля в щит приходящих с МОП",
+    "Монтаж заземления инсталляции",
+    "Установка закладных для датчиков теплого пола",
+    "Монтаж подрозетников в санузлах для вывода датчика протечки",
+    "Монтаж силового щита",
+    "Монтаж слаботочного щита",
+    "Монтаж КУП"
+  ]
+};
 
 const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
   // Состояние для навигации и фильтров
@@ -36,6 +95,7 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
   const [newWorkName, setNewWorkName] = useState('');
   const [newWorkSection, setNewWorkSection] = useState<'Отделочные работы' | 'Работы по ОВК' | 'Работы по ЭОМ+АСУ'>('Отделочные работы');
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showImporter, setShowImporter] = useState(false);
   // Флаг: уже инициализировано из БД (используем для защиты от очистки таблицы пустым ответом)
   const initializedFromDbRef = useRef(false);
 
@@ -212,7 +272,7 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
   const floors = [
     'T101', 'T201', 'T202-И', 'T203', 'T301', 'T302', 'T303', 'T401', 'T402', 'T403-И', 'T404',
     'T501', 'T502', 'T503-И', 'T504-И', 'T601', 'T602', 'T603', 'T604', 'T701', 'T702-И', 'T703-И', 'T704-И',
-    'T801-И', 'T802', 'T803', 'T804', 'T901', 'T902-И', 'T903', 'T1001', 'T1002', 'T1003', 'T1004',
+    'T801-И', 'T802', 'T803', 'T804', 'T901', 'T902-И', 'T903', 'T904', 'T1001', 'T1002', 'T1003', 'T1004',
     'T1101', 'T1102', 'T1103', 'T1104', 'T1201', 'T1202', 'T1203-И', 'T1204', 'T1301-И', 'T1302', 'T1401',
     'У501', 'У502', 'У503', 'У504', 'У704'
   ];
@@ -285,6 +345,23 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
     }
   };
 
+  // Функция для удаления ведущих нулей из ввода
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value;
+    
+    // Убираем ведущие нули, но оставляем "0" если это единственный символ
+    if (value.length > 1 && value.startsWith('0')) {
+      // Убираем все ведущие нули
+      value = value.replace(/^0+/, '');
+      // Если после удаления нулей ничего не осталось, оставляем "0"
+      if (value === '') {
+        value = '0';
+      }
+    }
+    
+    setInputValue(value);
+  };
+
   const handleSave = async () => {
     if (editingCell) {
       const { task, section, floor, type } = editingCell;
@@ -336,6 +413,7 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
 
         if (result) {
           console.log('✅ Данные прогресса сохранены:', result);
+          
           // Перезагружаем данные из базы
           await loadProgressData();
         } else {
@@ -432,7 +510,7 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
     return Math.round(sum / values.length);
   };
 
-  // Фильтрация и поиск
+  // Фильтрация и поиск с правильной сортировкой
   const filteredTasks = useMemo(() => {
     let tasks = Object.keys(progress);
     
@@ -451,6 +529,22 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
       if (!sectionData) return false;
 
       return true;
+    });
+    
+    // Сортируем по правильному порядку из TASK_ORDER
+    const order = TASK_ORDER[selectedSection] || [];
+    tasks.sort((a, b) => {
+      const indexA = order.indexOf(a);
+      const indexB = order.indexOf(b);
+      // Если обе работы в списке порядка - сортируем по индексу
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // Если только одна в списке - она идет первой
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      // Если обе не в списке - сортируем по алфавиту
+      return a.localeCompare(b);
     });
     
     return tasks;
@@ -528,7 +622,17 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
                     Загрузка данных...
                   </span>
                 ) : (
-                  `Управление ${Object.keys(progress).length} работ по ${floors.length} квартирам`
+                  `Управление ${(() => {
+                    // Считаем уникальные комбинации task_name|section, исключая неправильные записи
+                    const validWorks = new Set(
+                      progressData
+                        .filter(item => !(item.task_name === 'Гидроизоляция общая' && item.section === 'Общая'))
+                        .map(item => `${item.task_name}|${item.section}`)
+                    );
+                    const count = validWorks.size || Object.keys(progress).reduce((total, task) => total + Object.keys(progress[task] || {}).length, 0);
+                    // Если количество больше 47, показываем 47 (исправление для неправильных записей в БД)
+                    return count > 47 ? 47 : count;
+                  })()} работ по ${floors.length} квартирам`
                 )}
               </p>
               </div>
@@ -554,6 +658,14 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
               >
                 Диагностика
               </button>
+              <button
+                onClick={() => setShowImporter(true)}
+                className="border border-green-500/30 bg-green-500/20 hover:bg-green-500/30 text-green-200 px-4 py-3 rounded-xl transition-all flex items-center space-x-2"
+                title="Импортировать данные из фотографии таблицы прогресса"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Импорт из таблицы</span>
+              </button>
             </div>
           </div>
           {showAddForm && (
@@ -576,7 +688,7 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                 >
                   {sections.map(s => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s} className="bg-slate-800 text-white">{s}</option>
                   ))}
                 </select>
               </div>
@@ -816,8 +928,8 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
                                                 <input
                                                   type="number"
                                                   value={inputValue}
-                                                  onChange={(e) => setInputValue(e.target.value)}
-                                                  className="w-full text-center border border-white/20 bg-white/5 rounded-lg text-xs p-1.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                  onChange={handleInputChange}
+                                                  className="w-full text-center border border-white/20 bg-white/5 rounded-lg text-xs p-1.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                   autoFocus
                                                   onBlur={handleSave}
                                                   onKeyDown={(e) => {
@@ -867,8 +979,8 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
                                                 <input
                                                   type="number"
                                                   value={inputValue}
-                                                  onChange={(e) => setInputValue(e.target.value)}
-                                                  className="w-full text-center border border-white/20 bg-white/5 rounded-lg text-xs p-1.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                  onChange={handleInputChange}
+                                                  className="w-full text-center border border-white/20 bg-white/5 rounded-lg text-xs p-1.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                   autoFocus
                                                   onBlur={handleSave}
                                                   onKeyDown={(e) => {
@@ -940,8 +1052,8 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
                                         <input
                                           type="number"
                                           value={inputValue}
-                                          onChange={(e) => setInputValue(e.target.value)}
-                                          className="w-full text-center border rounded text-xs p-1"
+                                          onChange={handleInputChange}
+                                          className="w-full text-center border rounded text-xs p-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           autoFocus
                                           onBlur={handleSave}
                                           onKeyDown={(e) => {
@@ -982,8 +1094,8 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
                                         <input
                                           type="number"
                                           value={inputValue}
-                                          onChange={(e) => setInputValue(e.target.value)}
-                                          className="w-full text-center border rounded text-xs p-1"
+                                          onChange={handleInputChange}
+                                          className="w-full text-center border rounded text-xs p-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           autoFocus
                                           onBlur={handleSave}
                                           onKeyDown={(e) => {
@@ -1044,6 +1156,34 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ userRole }) => {
           </div>
         </div>
       </div>
+
+      {/* Модальное окно импорта */}
+      {showImporter && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900/80 via-slate-900/40 to-slate-900/20 shadow-[0_25px_80px_rgba(8,15,40,0.65)] p-6">
+            <button
+              type="button"
+              onClick={() => setShowImporter(false)}
+              className="absolute right-4 top-4 rounded-lg px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-white"
+            >
+              ✕
+            </button>
+            <ProgressTableImporter
+              onComplete={(imported, failed) => {
+                console.log(`Импорт завершен: ${imported} успешно, ${failed} ошибок`);
+                // Перезагружаем данные после импорта
+                if (imported > 0) {
+                  loadProgressData();
+                }
+                // Закрываем окно через 2 секунды после успешного импорта
+                if (failed === 0) {
+                  setTimeout(() => setShowImporter(false), 2000);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

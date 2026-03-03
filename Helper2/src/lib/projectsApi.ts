@@ -435,7 +435,7 @@ export const getProjectKPIs = async (): Promise<ProjectKPI> => {
     // Обрабатываем каждый проект
     for (const project of allProjects) {
       try {
-        // Для "Вишневый сад" используем статические данные (как в дашборде и ProjectCard)
+        // Для "Вишневый сад" используем статические данные (как в сводке и ProjectCard)
         let actualProgress = 0;
         let startDate = 0;
         let endDate = 0;

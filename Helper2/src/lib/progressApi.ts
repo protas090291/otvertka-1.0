@@ -11,17 +11,35 @@ import { validateRequired, validateProgress, validateApartmentId, validateString
  */
 export const getAllProgressData = async (): Promise<ProgressData[]> => {
   try {
-    const { data, error } = await supabase
-      .from('progress_data')
-      .select('*')
-      .order('task_name', { ascending: true });
+    // Загружаем все данные с пагинацией (Supabase по умолчанию лимит 1000)
+    let allData: ProgressData[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (error) {
-      console.error('Ошибка получения данных прогресса:', error);
-      throw error;
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('progress_data')
+        .select('*')
+        .order('task_name', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.error('Ошибка получения данных прогресса:', error);
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        from += pageSize;
+        hasMore = data.length === pageSize; // Если получили полную страницу, возможно есть еще
+      } else {
+        hasMore = false;
+      }
     }
 
-    return data || [];
+    console.log(`📊 getAllProgressData: загружено ${allData.length} записей`);
+    return allData;
   } catch (error) {
     console.error('Ошибка в getAllProgressData:', error);
     return [];
