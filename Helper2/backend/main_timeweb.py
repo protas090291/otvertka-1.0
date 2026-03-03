@@ -39,7 +39,16 @@ elif public_key:
 # Импортируем модуль yandex_disk_api с обработкой ошибок
 # Делаем импорт безопасным, чтобы приложение могло запуститься даже при ошибках
 yandex_disk_api_available = False
+get_folder_contents = None
+get_public_download_link = None
+get_public_view_link = None
+get_download_link = None
+download_file = None
+get_yandex_disk_public_key = None
+get_yandex_disk_token = None
+
 try:
+    logger.info("🔄 Попытка импорта модуля yandex_disk_api...")
     from yandex_disk_api import (
         get_folder_contents,
         get_public_download_link,
@@ -53,15 +62,26 @@ try:
     logger.info("✅ Модуль yandex_disk_api успешно импортирован")
 except ImportError as e:
     logger.error(f"❌ Ошибка импорта yandex_disk_api: {e}")
-    logger.error("Проверьте, что файл yandex_disk_api.py существует в директории backend")
+    logger.error(f"   Тип ошибки: {type(e).__name__}")
+    logger.error(f"   Детали: {str(e)}")
+    import traceback
+    logger.error(f"   Traceback: {traceback.format_exc()}")
     logger.warning("⚠️ Приложение запустится, но API Яндекс Диска будет недоступно")
 except Exception as e:
-    logger.error(f"❌ Ошибка при загрузке модуля yandex_disk_api: {e}")
+    logger.error(f"❌ Неожиданная ошибка при загрузке модуля yandex_disk_api: {e}")
+    logger.error(f"   Тип ошибки: {type(e).__name__}")
+    import traceback
+    logger.error(f"   Traceback: {traceback.format_exc()}")
     logger.warning("⚠️ Приложение запустится, но API Яндекс Диска будет недоступно")
 
-app = FastAPI(title="Yandex Disk API Proxy")
-
-logger.info("🚀 FastAPI приложение инициализировано")
+try:
+    app = FastAPI(title="Yandex Disk API Proxy")
+    logger.info("🚀 FastAPI приложение инициализировано")
+except Exception as e:
+    logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА при создании FastAPI приложения: {e}")
+    import traceback
+    logger.error(f"   Traceback: {traceback.format_exc()}")
+    raise
 
 # CORS для работы с фронтендом
 # В продакшене можно указать конкретные домены через переменную окружения ALLOWED_ORIGINS
@@ -100,7 +120,8 @@ async def root():
     return {
         "status": "ok",
         "service": "Yandex Disk API Proxy",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "yandex_disk_api_available": yandex_disk_api_available
     }
 
 @app.get("/api/yandex-disk/files")
