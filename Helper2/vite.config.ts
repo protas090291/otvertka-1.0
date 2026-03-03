@@ -1,14 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { startBackendPlugin } from './vite-plugin-start-backend';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vitejs.dev/config/
+// Vite автоматически определяет root как директорию, где находится vite.config.ts
+// Поэтому index.html должен быть в той же директории, что и vite.config.ts
 export default defineConfig({
-  root: __dirname, // Явно указываем директорию, где находится vite.config.ts
   plugins: [
     react(),
     // Отключаем плагин для production сборки (он только для dev режима)
