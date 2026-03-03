@@ -199,5 +199,14 @@ export const getYandexDiskViewLink = async (filePath: string): Promise<string> =
   }
   
   const data = await response.json();
-  return data.view_url;
+  let viewUrl = data.view_url;
+  
+  // Если бэкенд вернул относительный URL, формируем полный URL
+  if (viewUrl && viewUrl.startsWith('/')) {
+    // Извлекаем базовый URL из BACKEND_API_URL (убираем /api/yandex-disk)
+    const baseUrl = BACKEND_API_URL.replace('/api/yandex-disk', '');
+    viewUrl = `${baseUrl}${viewUrl}`;
+  }
+  
+  return viewUrl;
 };
