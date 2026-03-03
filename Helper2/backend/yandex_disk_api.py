@@ -8,52 +8,17 @@ import requests
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 from dotenv import load_dotenv
-from pathlib import Path
 
 # Загружаем переменные окружения из .env файла
-# Используем абсолютный путь к файлу .env в директории backend
-script_file = Path(__file__).resolve()
-script_dir = script_file.parent
-
-# Ищем .env файл в директории backend
-# Убираем рекурсивные пути, находим первый 'backend' в пути
-parts = list(script_dir.parts)
-backend_indices = [i for i, part in enumerate(parts) if part == 'backend']
-
-if backend_indices:
-    # Берем первый индекс 'backend'
-    backend_index = backend_indices[0]
-    backend_dir = Path(*parts[:backend_index + 1])
-    env_path = backend_dir / ".env"
-else:
-    # Если не нашли 'backend', используем директорию скрипта
-    env_path = script_dir / ".env"
-
-# Пробуем несколько вариантов загрузки
-env_paths_to_try = [
-    env_path,  # Основной путь
-    script_dir / ".env",  # Рядом со скриптом
-    Path.cwd() / ".env",  # В текущей рабочей директории
-]
-
-loaded = False
-for path in env_paths_to_try:
-    if path.exists():
-        load_dotenv(dotenv_path=path, override=True)
-        loaded = True
-        break
-
-# Если ни один файл не найден, пробуем загрузить из текущей директории
-if not loaded:
-    load_dotenv(override=True)
-
-# Дополнительная проверка: загружаем из всех найденных файлов .env
-# Это гарантирует, что переменные будут загружены
-for path in env_paths_to_try:
-    if path.exists():
-        load_dotenv(dotenv_path=path, override=True)
-        break
-
+# Упрощенная версия - просто загружаем из текущей директории и окружения
+# В TimeWeb переменные окружения устанавливаются через панель, .env файл не нужен
+try:
+    # Пробуем загрузить из текущей директории (если есть)
+    # В TimeWeb переменные окружения устанавливаются через панель управления
+    load_dotenv(override=False)
+except Exception:
+    # Игнорируем ошибки загрузки .env - переменные могут быть установлены через окружение
+    pass
 # Базовый URL API Яндекс Диска
 YANDEX_DISK_API_BASE = "https://cloud-api.yandex.net/v1/disk"
 
