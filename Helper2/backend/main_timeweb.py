@@ -20,7 +20,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Загружаем переменные окружения перед импортом yandex_disk_api
-load_dotenv()
+# В TimeWeb переменные окружения устанавливаются через панель, .env файл не обязателен
+try:
+    load_dotenv(override=False)
+except Exception as e:
+    logger.warning(f"Не удалось загрузить .env файл: {e}. Используются переменные окружения из системы.")
 
 # Проверяем наличие токена при старте (но не падаем, если его нет)
 token = os.getenv('YANDEX_DISK_TOKEN')
