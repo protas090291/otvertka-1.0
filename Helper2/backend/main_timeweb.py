@@ -5,22 +5,33 @@
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from yandex_disk_api import (
-    get_folder_contents,
-    get_public_download_link,
-    get_public_view_link,
-    get_download_link,
-    download_file,
-    get_yandex_disk_public_key,
-    get_yandex_disk_token
-)
 from fastapi.responses import Response
 import os
 from dotenv import load_dotenv
-from typing import Optional
+from typing import Optional, Any
+import sys
 
-# Загружаем переменные окружения
+# Загружаем переменные окружения перед импортом yandex_disk_api
 load_dotenv()
+
+# Импортируем модуль yandex_disk_api с обработкой ошибок
+try:
+    from yandex_disk_api import (
+        get_folder_contents,
+        get_public_download_link,
+        get_public_view_link,
+        get_download_link,
+        download_file,
+        get_yandex_disk_public_key,
+        get_yandex_disk_token
+    )
+except ImportError as e:
+    print(f"❌ Ошибка импорта yandex_disk_api: {e}", file=sys.stderr)
+    print("Проверьте, что файл yandex_disk_api.py существует в директории backend", file=sys.stderr)
+    raise
+except Exception as e:
+    print(f"❌ Ошибка при загрузке модуля yandex_disk_api: {e}", file=sys.stderr)
+    raise
 
 app = FastAPI(title="Yandex Disk API Proxy")
 
@@ -245,13 +256,14 @@ async def view_file(file_path: str = Query(...)):
         raise HTTPException(status_code=500, detail=f"Ошибка просмотра файла: {str(e)}")
 
 @app.get("/api/yandex-disk/view-link")
-async def get_view_link_endpoint(file_path: str = Query(...)):
+async def get_view_link_endpoint(file_path: str = Query(...), request: Optional[Any] = None):
     """
     Получить ссылку для просмотра файла через наш бэкэнд прокси
     Это позволяет обойти CSP ограничения Яндекс Диска
     
     Args:
         file_path: Путь к файлу
+        request: Request объект для получения базового URL
     
     Returns:
         Ссылка для просмотра через наш бэкэнд
@@ -260,8 +272,13 @@ async def get_view_link_endpoint(file_path: str = Query(...)):
         # Используем наш бэкэнд эндпоинт для просмотра файла
         # Это позволяет открывать файлы в iframe без проблем с CSP
         from urllib.parse import quote
+        from fastapi import Request
+        
         encoded_path = quote(file_path, safe='')
-        view_url = f"http://localhost:8000/api/yandex-disk/view?file_path={encoded_path}"
+        
+        # Используем относительный URL для работы в любом окружении
+        # Frontend сам добавит правильный базовый URL
+        view_url = f"/api/yandex-disk/view?file_path={encoded_path}"
         
         return {
             'view_url': view_url,
