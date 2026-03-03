@@ -10,9 +10,27 @@ import os
 from dotenv import load_dotenv
 from typing import Optional, Any
 import sys
+import logging
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Загружаем переменные окружения перед импортом yandex_disk_api
 load_dotenv()
+
+# Проверяем наличие токена при старте (но не падаем, если его нет)
+token = os.getenv('YANDEX_DISK_TOKEN')
+public_key = os.getenv('YANDEX_DISK_PUBLIC_KEY')
+if not token and not public_key:
+    logger.warning("⚠️ YANDEX_DISK_TOKEN и YANDEX_DISK_PUBLIC_KEY не установлены. API Яндекс Диска может не работать.")
+elif token:
+    logger.info("✅ YANDEX_DISK_TOKEN установлен")
+elif public_key:
+    logger.info("✅ YANDEX_DISK_PUBLIC_KEY установлен")
 
 # Импортируем модуль yandex_disk_api с обработкой ошибок
 try:
@@ -25,15 +43,18 @@ try:
         get_yandex_disk_public_key,
         get_yandex_disk_token
     )
+    logger.info("✅ Модуль yandex_disk_api успешно импортирован")
 except ImportError as e:
-    print(f"❌ Ошибка импорта yandex_disk_api: {e}", file=sys.stderr)
-    print("Проверьте, что файл yandex_disk_api.py существует в директории backend", file=sys.stderr)
+    logger.error(f"❌ Ошибка импорта yandex_disk_api: {e}")
+    logger.error("Проверьте, что файл yandex_disk_api.py существует в директории backend")
     raise
 except Exception as e:
-    print(f"❌ Ошибка при загрузке модуля yandex_disk_api: {e}", file=sys.stderr)
+    logger.error(f"❌ Ошибка при загрузке модуля yandex_disk_api: {e}")
     raise
 
 app = FastAPI(title="Yandex Disk API Proxy")
+
+logger.info("🚀 FastAPI приложение инициализировано")
 
 # CORS для работы с фронтендом
 # В продакшене можно указать конкретные домены через переменную окружения ALLOWED_ORIGINS

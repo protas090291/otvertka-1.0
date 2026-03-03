@@ -555,3 +555,74 @@ def get_public_view_link(public_key: str, file_path: str) -> str:
     except Exception as e:
         raise Exception(f"Ошибка при получении ссылки для просмотра: {str(e)}")
 
+def get_view_link(file_path: str, public_key: Optional[str] = None) -> str:
+    """
+    Получить ссылку для просмотра файла
+    Поддерживает как обычные папки (с OAuth токеном), так и публичные папки (без токена)
+    
+    Args:
+        file_path: Путь к файлу на Яндекс Диске
+        public_key: Публичный ключ папки (если используется публичная папка)
+    
+    Returns:
+        URL для просмотра файла в браузере
+    """
+    try:
+        # Если указан публичный ключ, используем публичный API
+        if public_key:
+            return get_public_view_link(public_key, file_path)
+        
+        # Проверяем, используется ли публичная папка по умолчанию
+        default_public_key = get_yandex_disk_public_key()
+        if default_public_key:
+            return get_public_view_link(default_public_key, file_path)
+        
+        # Работа с обычной папкой (требуется OAuth токен)
+        # Нормализуем путь: убираем префикс "disk:" если есть
+        if file_path.startswith('disk:'):
+            file_path = file_path[5:]  # Убираем "disk:"
+        
+        # Нормализуем путь
+        file_path = file_path.strip('/')
+        if not file_path.startswith('/'):
+            file_path = f'/{file_path}'
+        
+        # Получаем информацию о файле для получения preview ссылки
+        url = f"{YANDEX_DISK_API_BASE}/resources"
+        params = {
+            'path': file_path,
+            'preview_size': 'M'  # Размер превью
+        }
+        
+        headers = get_headers()
+        response = requests.get(url, headers=headers, params=params, timeout=60)
+        
+        if response.status_code == 200:
+            data = response.json()
+            # Пробуем использовать preview ссылку, если доступна
+            preview = data.get('preview', '')
+            if preview:
+                return preview
+            
+            # Если preview нет, создаем прямую ссылку на Яндекс Диск
+            # Формат: https://disk.yandex.ru/client/disk/{path}
+            from urllib.parse import quote
+            encoded_path = quote(file_path, safe='')
+            view_url = f"https://disk.yandex.ru/client/disk{encoded_path}"
+            return view_url
+        elif response.status_code == 401:
+            raise ValueError("Неверный OAuth токен или токен истек")
+        elif response.status_code == 403:
+            raise ValueError("Нет доступа к файлу")
+        elif response.status_code == 404:
+            raise ValueError(f"Файл не найден: {file_path}")
+        else:
+            error_data = response.json() if response.content else {}
+            error_message = error_data.get('message', f'Ошибка API: {response.status_code}')
+            raise Exception(f"Ошибка получения ссылки для просмотра: {error_message}")
+    
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Ошибка подключения к API Яндекс Диска: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Ошибка при получении ссылки для просмотра: {str(e)}")
+
