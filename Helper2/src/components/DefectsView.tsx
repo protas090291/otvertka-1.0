@@ -193,6 +193,24 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
 
   // Функция для определения типа квартиры и соответствующего плана (синхронизировано с useSupabase.ts)
   const getApartmentTypeAndPlan = (apartmentNumber: string) => {
+    // Извлекаем номер квартиры из строки (убираем префикс корпуса У/T)
+    let cleanApartmentNumber = apartmentNumber.trim();
+    
+    // Определяем корпус по префиксу
+    const hasUPrefix = cleanApartmentNumber.startsWith('У') || cleanApartmentNumber.startsWith('у') || 
+                       cleanApartmentNumber.startsWith('U') || cleanApartmentNumber.startsWith('u');
+    const hasTPrefix = cleanApartmentNumber.startsWith('T') || cleanApartmentNumber.startsWith('т') ||
+                       cleanApartmentNumber.startsWith('t');
+    
+    // Убираем префикс, если есть
+    if (hasUPrefix || hasTPrefix) {
+      cleanApartmentNumber = cleanApartmentNumber.replace(/^[УуUuTтt]\s*/, '');
+    }
+    
+    // Определяем корпус: если есть префикс У или номер квартиры из корпуса У
+    const buildingUApartments = ['501', '502', '503', '504', '704'];
+    const isBuildingU = hasUPrefix || buildingUApartments.includes(cleanApartmentNumber);
+    
     // Полный список всех квартир из таблицы
     const allApartments = [
       // Этаж 1
@@ -226,41 +244,44 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
     ];
 
     // Проверяем, есть ли квартира в списке
-    if (!allApartments.includes(apartmentNumber)) {
+    if (!allApartments.includes(cleanApartmentNumber)) {
       return {
         type: 'unknown',
-        planApartment: apartmentNumber,
-        isTypical: false
+        planApartment: cleanApartmentNumber,
+        isTypical: false,
+        building: isBuildingU ? 'U' : 'T'
       };
     }
 
-           // Индивидуальные квартиры (имеют свои уникальные планы)
-           const individualApartments = ['404', '504', '704', '804', '1204']; // 403 и 603 теперь используются для типовых квартир
+    // Индивидуальные квартиры (имеют свои уникальные планы)
+    const individualApartments = ['404', '504', '704', '804', '1204']; // 403 и 603 теперь используются для типовых квартир
 
-    if (individualApartments.includes(apartmentNumber)) {
+    if (individualApartments.includes(cleanApartmentNumber)) {
       return {
         type: 'individual',
-        planApartment: apartmentNumber,
-        isTypical: false
+        planApartment: cleanApartmentNumber,
+        isTypical: false,
+        building: isBuildingU ? 'U' : 'T'
       };
     }
 
-           // Типовые квартиры - определяем по последней цифре
-           const typicalPlanMap: { [key: string]: string } = {
-             '1': '403', // Типовые квартиры 1 используют план 403
-             '2': '402', // Типовые квартиры 2 используют план 402
-             '3': '603', // Типовые квартиры 3 используют план 603
-             '4': '804'  // Типовые квартиры 4 используют план 804
-           };
+    // Типовые квартиры - определяем по последней цифре
+    const typicalPlanMap: { [key: string]: string } = {
+      '1': '403', // Типовые квартиры 1 используют план 403
+      '2': '402', // Типовые квартиры 2 используют план 402
+      '3': '603', // Типовые квартиры 3 используют план 603
+      '4': '804'  // Типовые квартиры 4 используют план 804
+    };
 
-    const lastDigit = apartmentNumber.slice(-1);
-    const planApartment = typicalPlanMap[lastDigit] || apartmentNumber;
+    const lastDigit = cleanApartmentNumber.slice(-1);
+    const planApartment = typicalPlanMap[lastDigit] || cleanApartmentNumber;
 
     return {
       type: 'typical',
       planApartment,
       isTypical: true,
-      typicalGroup: lastDigit
+      typicalGroup: lastDigit,
+      building: isBuildingU ? 'U' : 'T'
     };
   };
 
@@ -271,12 +292,11 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
       console.log(`🏠 Загружаем план для квартиры: ${apartment}`);
       
       // Определяем тип квартиры и источник плана
-      const { type, planApartment, isTypical, typicalGroup } = getApartmentTypeAndPlan(apartment);
-      console.log(`📋 Квартира ${apartment}:`, { type, planApartment, isTypical, typicalGroup });
+      const { type, planApartment, isTypical, typicalGroup, building } = getApartmentTypeAndPlan(apartment);
+      console.log(`📋 Квартира ${apartment}:`, { type, planApartment, isTypical, typicalGroup, building });
       
-      // Определяем, относится ли квартира к корпусу У
-      const buildingUApartments = ['501', '502', '503', '504', '704'];
-      const isBuildingU = buildingUApartments.includes(apartment);
+      // Определяем, относится ли квартира к корпусу У (используем информацию из getApartmentTypeAndPlan)
+      const isBuildingU = building === 'U';
       
       // Получаем все файлы из Storage
       const { data: allFilesData, error: allFilesError } = await supabaseAdmin.storage
@@ -2651,11 +2671,11 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
                         Архитектурный план для квартиры {selectedApartmentForPlan} не найден в базе данных
                       </p>
                       {(() => {
-                        const { type, planApartment, isTypical } = getApartmentTypeAndPlan(selectedApartmentForPlan);
+                        const { type, planApartment, isTypical, building } = getApartmentTypeAndPlan(selectedApartmentForPlan);
                         return (
                           <div className="text-xs text-slate-400 space-y-1">
                             <p>Тип: {type === 'individual' ? 'Индивидуальная' : type === 'typical' ? 'Типовая' : 'Неизвестная'}</p>
-                            <p>Ищем план: T{planApartment}</p>
+                            <p>Ищем план: {building === 'U' ? 'У' : 'T'}{planApartment}</p>
                             {isTypical && <p>Использует типовой план</p>}
                           </div>
                         );
