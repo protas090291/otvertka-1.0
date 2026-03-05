@@ -274,6 +274,10 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
       const { type, planApartment, isTypical, typicalGroup } = getApartmentTypeAndPlan(apartment);
       console.log(`📋 Квартира ${apartment}:`, { type, planApartment, isTypical, typicalGroup });
       
+      // Определяем, относится ли квартира к корпусу У
+      const buildingUApartments = ['501', '502', '503', '504', '704'];
+      const isBuildingU = buildingUApartments.includes(apartment);
+      
       // Получаем все файлы из Storage
       const { data: allFilesData, error: allFilesError } = await supabaseAdmin.storage
         .from('architectural-plans')
@@ -290,14 +294,43 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
       const planFiles = allFilesData?.filter(file => {
         const fileName = file.name;
         
-        // Ищем файлы, которые содержат номер квартиры-источника
-        // Например, для квартиры 1003 (тип 3) ищем файлы с T503
-        const planMatch = fileName.match(/T(\d+)/);
-        if (planMatch) {
-          const fileApartmentNum = planMatch[1];
-          return fileApartmentNum === planApartment;
+        if (isBuildingU) {
+          // Для корпуса У ищем файлы с префиксом У (кириллица) или U (латиница)
+          // Сначала проверяем, что файл НЕ относится к корпусу Т
+          const isBuildingT = fileName.match(/T(\d+)/);
+          if (isBuildingT) {
+            console.log(`❌ Пропущен файл корпуса Т для корпуса У: ${fileName}`);
+            return false;
+          }
+          
+          // Ищем файлы с префиксом У или U
+          const planMatch = fileName.match(/[УU](\d+)/);
+          if (planMatch) {
+            const fileApartmentNum = planMatch[1];
+            const matches = fileApartmentNum === planApartment;
+            if (matches) {
+              console.log(`✅ Найден файл для У${planApartment}: ${fileName}`);
+            }
+            return matches;
+          }
+          
+          console.log(`⚠️ Файл не относится к корпусу У: ${fileName}`);
+          return false;
+        } else {
+          // Для корпуса Т ищем файлы с префиксом T (исключаем файлы корпуса У)
+          const isBuildingU = fileName.match(/[УU](\d+)/);
+          if (isBuildingU) {
+            console.log(`❌ Пропущен файл корпуса У для корпуса Т: ${fileName}`);
+            return false;
+          }
+          
+          const planMatch = fileName.match(/T(\d+)/);
+          if (planMatch) {
+            const fileApartmentNum = planMatch[1];
+            return fileApartmentNum === planApartment;
+          }
+          return false;
         }
-        return false;
       }) || [];
       
       console.log(`📋 Файлы для плана квартиры ${planApartment}:`, planFiles);
@@ -314,7 +347,7 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
         return data.publicUrl;
       }
 
-      console.log(`❌ PDF план не найден для квартиры ${apartment} (источник: ${planApartment})`);
+      console.log(`❌ PDF план не найден для квартиры ${apartment} (источник: ${planApartment}, корпус: ${isBuildingU ? 'У' : 'Т'})`);
       return null;
     } catch (error) {
       console.error('Error loading apartment plan:', error);
