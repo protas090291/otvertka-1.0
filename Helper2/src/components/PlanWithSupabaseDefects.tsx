@@ -249,22 +249,13 @@ const PlanWithSupabaseDefects: React.FC<PlanWithSupabaseDefectsProps> = ({
             const colorClass = getDefectColor(defect.status);
             const canChangeStatus = (userRole === 'technadzor' || userRole === 'contractor');
             
-            // Корректируем координаты с учетом трансформаций контейнера
-            // Координаты сохраняются относительно контейнера без трансформаций (100%)
-            // А отображаются на контейнере с width: 80%, height: 80%
-            // Поэтому нужно скорректировать: координата / размер_контейнера
-            const widthPercent = 0.8;  // 80%
-            const heightPercent = 0.8; // 80%
-            const adjustedX = defect.x_coord / widthPercent;
-            const adjustedY = defect.y_coord / heightPercent;
-            
             return (
               <div
                 key={defect.id}
                 className="absolute pointer-events-auto"
                 style={{
-                  left: `${adjustedX}%`,
-                  top: `${adjustedY}%`,
+                  left: `${defect.x_coord}%`,
+                  top: `${defect.y_coord}%`,
                   transform: 'translate(-50%, -50%)'
                 }}
               >

@@ -39,23 +39,13 @@ const PlanWithMarks: React.FC<PlanWithMarksProps> = ({
       
       {/* Overlay с отметками */}
       <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10, transform: 'scale(1.25)', transformOrigin: 'top left', width: '80%', height: '80%' }}>
-        {marks.map((mark) => {
-          // Корректируем координаты с учетом трансформаций контейнера
-          // Координаты сохраняются относительно контейнера без трансформаций (100%)
-          // А отображаются на контейнере с width: 80%, height: 80%
-          // Поэтому нужно скорректировать: координата / размер_контейнера
-          const widthPercent = 0.8;  // 80%
-          const heightPercent = 0.8; // 80%
-          const adjustedX = mark.x / widthPercent;
-          const adjustedY = mark.y / heightPercent;
-          
-          return (
+        {marks.map((mark) => (
           <div
             key={mark.markId}
             className="absolute"
             style={{
-              left: `${adjustedX}%`,
-              top: `${adjustedY}%`,
+              left: `${mark.x}%`,
+              top: `${mark.y}%`,
               transform: 'translate(-50%, -50%)'
             }}
           >
@@ -74,8 +64,7 @@ const PlanWithMarks: React.FC<PlanWithMarksProps> = ({
               <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-red-500"></div>
             </div>
           </div>
-          );
-        })}
+        ))}
       </div>
     </div>
   );
