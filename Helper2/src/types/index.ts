@@ -100,19 +100,33 @@ export interface Defect {
   planMark?: PlanMark;
 }
 
-// Новый интерфейс для работы с Supabase
+// Интерфейс для работы с дефектами Supabase
+// Примечание: В БД status — enum('opened' | 'active' | 'resolved' | 'canceled'),
+// но в UI-коде исторически используется пара 'active' | 'fixed'.
+// Конвертация выполняется на границе API (см. hybridDefectsApi.ts).
 export interface SupabaseDefect {
   id: string;
   apartment_id: string;
   title: string;
-  description?: string;
-  photo_url?: string;
+  description?: string | null;
+  /** Вычисляемое поле: берётся из первой записи defect_images */
+  photo_url?: string | null;
   status: 'active' | 'fixed';
+  /** Детальный статус для UI (маппинг в DB enum) */
+  status_detail?: 'open' | 'in-progress' | 'resolved' | 'closed';
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+  assigned_to?: string | null;
+  created_by?: string | null;
+  due_date?: string | null;
   x_coord: number;
   y_coord: number;
   created_at: string;
   updated_at: string;
 }
+
+// Статусы из DB (enum DefectStatus)
+export type DbDefectStatus = 'opened' | 'active' | 'resolved' | 'canceled';
+export type DbDefectSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export interface PlanMark {
   x: number; // Координата X в процентах
@@ -145,27 +159,29 @@ export interface SupabaseProject {
 
 export interface SupabaseApartment {
   id: string;
-  project_id: string;
-  apartment_number: string;
+  project_id: string | null;
+  apartment_number: string | number;
   floor: number;
   area: number;
   rooms: number;
-  status: 'available' | 'sold' | 'reserved';
+  status: string | null;
   price: number;
-  created_at: string;
-  updated_at: string;
+  building?: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface SupabaseArchitecturalPlan {
   id: string;
-  apartment_id: string;
-  plan_type: 'floor_plan' | 'elevation' | 'section' | '3d_model';
-  file_name: string;
+  apartment_id: string | null;
   file_url: string;
-  file_size: number;
-  building?: 'T' | 'U' | null; // Корпус: T - Корпус Т, U - Корпус У
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
+  // Клиентские опциональные поля — не пишутся в БД.
+  plan_type?: 'floor_plan' | 'elevation' | 'section' | '3d_model';
+  file_name?: string;
+  file_size?: number;
+  building?: 'T' | 'U' | null;
 }
 
 // Типы для работы с прогрессом работ

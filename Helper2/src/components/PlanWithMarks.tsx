@@ -16,29 +16,18 @@ const PlanWithMarks: React.FC<PlanWithMarksProps> = ({
 }) => {
   return (
     <div className={`relative ${className}`}>
-      {/* PDF Viewer */}
-      <div style={{ 
-        transform: 'scale(1.25)', 
-        transformOrigin: 'top left',
-        width: '80%',
-        height: '80%'
-      }}>
-        <iframe
-          src={`https://docs.google.com/gview?url=${encodeURIComponent(planUrl)}&embedded=true&toolbar=0&zoom=117`}
-          className="w-full h-full border-0"
-          style={{ 
-            margin: 0, 
-            padding: 0,
-            pointerEvents: 'none',
-            userSelect: 'none',
-            touchAction: 'none'
-          }}
-          title={`План квартиры ${apartmentNumber}`}
-        />
-      </div>
-      
-      {/* Overlay с отметками */}
-      <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10, transform: 'scale(1.25)', transformOrigin: 'top left', width: '80%', height: '80%' }}>
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="relative inline-block">
+          <img
+            src={planUrl}
+            alt={`План квартиры ${apartmentNumber}`}
+            className="block max-w-full max-h-full select-none"
+            style={{ userSelect: 'none', touchAction: 'none' }}
+            draggable={false}
+          />
+
+          {/* Overlay с отметками */}
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10 }}>
         {marks.map((mark) => (
           <div
             key={mark.markId}
@@ -65,6 +54,8 @@ const PlanWithMarks: React.FC<PlanWithMarksProps> = ({
             </div>
           </div>
         ))}
+          </div>
+        </div>
       </div>
     </div>
   );

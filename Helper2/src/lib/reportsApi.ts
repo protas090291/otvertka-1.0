@@ -367,11 +367,13 @@ export const deleteReport = async (id: string): Promise<boolean> => {
 export const uploadReportPhoto = async (file: File, reportId: string): Promise<string | null> => {
   try {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${reportId}-${Date.now()}.${fileExt}`;
-    const filePath = `report-photos/${fileName}`;
+    // В проекте есть всего 2 бакета: plan и defects_images. Фото отчётов кладём в defects_images
+    // (префикс report- в имени файла, чтобы отличать от фото дефектов).
+    const fileName = `report-${reportId}-${Date.now()}.${fileExt}`;
+    const filePath = fileName;
 
-    const { data, error } = await supabase.storage
-      .from('report-photos')
+    const { error } = await supabase.storage
+      .from('defects_images')
       .upload(filePath, file);
 
     if (error) {
@@ -380,7 +382,7 @@ export const uploadReportPhoto = async (file: File, reportId: string): Promise<s
     }
 
     const { data: urlData } = supabase.storage
-      .from('report-photos')
+      .from('defects_images')
       .getPublicUrl(filePath);
 
     return urlData.publicUrl;

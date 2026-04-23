@@ -65,16 +65,15 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
     setError(null);
 
     try {
-      // Создаем дефект
+      // Создаем дефект (новая схема: photo_url попадёт в отдельную таблицу defect_images)
       const defectData = {
         apartment_id: apartmentId,
         title: formData.title.trim(),
-        description: formData.description.trim() || null,
-        photo_url: null,
+        description: formData.description.trim() || '',
         status: formData.status,
         x_coord: xCoord,
-        y_coord: yCoord
-      };
+        y_coord: yCoord,
+      } as const;
 
       const newDefect = await createDefect(defectData);
 
@@ -82,14 +81,11 @@ const CreateDefectForm: React.FC<CreateDefectFormProps> = ({
         throw new Error('Не удалось создать дефект');
       }
 
-      // Если есть фото, загружаем его
+      // Если есть фото, загружаем его в Storage и записываем в defect_images через updateDefect
       if (selectedPhoto && newDefect.id) {
         const photoUrl = await uploadDefectPhoto(selectedPhoto, newDefect.id);
         if (photoUrl) {
-          // Обновляем дефект с URL фото
-          await updateDefect(newDefect.id, {
-            photo_url: photoUrl
-          });
+          await updateDefect(newDefect.id, { photo_url: photoUrl });
         }
       }
 

@@ -205,17 +205,19 @@ const createTask = async (params: any) => {
       return await createTaskInLocalStorage(params);
     }
     
-    const taskData = {
-      name: params.name || 'Новая задача',
+    // Схема tasks: title, description, project_id, assigned_to, priority, status,
+    // progress_percentage, start_date, end_date, created_by (NOT NULL, default ''), user_id, ...
+    // Колонки apartment_id и due_date в таблице tasks НЕТ — используем end_date.
+    const taskData: Record<string, any> = {
+      title: params.name || params.title || 'Новая задача',
       description: params.description || 'Задача создана через AI помощника',
-      apartment_id: params.apartment_id,
-      assignee: params.assignee || 'Не назначен',
+      assigned_to: params.assignee || params.assigned_to || 'Не назначен',
       status: 'pending',
       priority: params.priority || 'medium',
-      due_date: params.due_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // +7 дней
+      end_date: params.due_date || params.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       created_by: params.created_by || 'ai_assistant',
-      created_at: new Date().toISOString()
     };
+    if (params.project_id) taskData.project_id = params.project_id;
     
     console.log('Данные для вставки:', taskData);
     
@@ -303,30 +305,26 @@ const updateTaskStatus = async (params: any) => {
   }
 };
 
-// Создание дефекта
+// Создание дефекта — через hybridDefectsApi, чтобы сконвертить статус/фото и подставить
+// обязательные поля (assigned_to/created_by/due_date/severity) из текущего пользователя.
 const createDefect = async (params: any) => {
   try {
-    const { data, error } = await supabase
-      .from('defects')
-      .insert([{
-        apartment_id: params.apartment_id,
-        title: params.title,
-        description: params.description,
-        status: 'active',
-        x_coord: params.x_coord || 50.0,
-        y_coord: params.y_coord || 50.0,
-        created_by: params.created_by
-      }])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    
-    // Уведомляем систему о создании дефекта
-    notifyDefectCreated(data);
+    const { createDefect: hybridCreateDefect } = await import('./hybridDefectsApi');
+    const created = await hybridCreateDefect({
+      apartment_id: params.apartment_id,
+      title: params.title || 'Новый дефект',
+      description: params.description || '',
+      status: 'active',
+      x_coord: params.x_coord ?? 50.0,
+      y_coord: params.y_coord ?? 50.0,
+    });
+
+    if (!created) throw new Error('createDefect вернул null');
+
+    notifyDefectCreated(created);
     triggerDataRefresh();
-    
-    return data;
+
+    return created;
   } catch (error) {
     console.error('Ошибка создания дефекта:', error);
     // Fallback на localStorage
@@ -370,21 +368,13 @@ const createDefectInLocalStorage = async (params: any) => {
   }
 };
 
-// Обновление статуса дефекта
+// Обновление статуса дефекта (через hybridDefectsApi для корректного маппинга в DB enum)
 const updateDefectStatus = async (params: any) => {
   try {
-    const { data, error } = await supabase
-      .from('defects')
-      .update({ 
-        status: params.status,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', params.defect_id)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
+    const { updateDefectStatus: hybridUpdateStatus } = await import('./hybridDefectsApi');
+    const updated = await hybridUpdateStatus(params.defect_id, params.status);
+    if (!updated) throw new Error('updateDefectStatus вернул null');
+    return updated;
   } catch (error) {
     console.error('Ошибка обновления статуса дефекта:', error);
     throw error;
@@ -437,10 +427,14 @@ const createLetter = async (params: any) => {
 // Получение информации о квартире
 const getApartmentInfo = async (apartmentId: string) => {
   try {
+    // В таблице tasks нет apartment_id, поэтому все задачи по квартире отфильтруем на клиенте по title/description.
+    const apartmentNum = Number(apartmentId);
     const [apartment, defects, tasks] = await Promise.all([
-      supabase.from('apartments').select('*').eq('apartment_number', apartmentId).single(),
+      Number.isFinite(apartmentNum)
+        ? supabase.from('apartments').select('*').eq('apartment_number', apartmentNum).maybeSingle()
+        : Promise.resolve({ data: null, error: null } as any),
       getDefectsByApartment(apartmentId),
-      supabase.from('tasks').select('*').eq('apartment_id', apartmentId)
+      supabase.from('tasks').select('*').or(`title.ilike.%${apartmentId}%,description.ilike.%${apartmentId}%`)
     ]);
     
     return {

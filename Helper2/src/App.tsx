@@ -5,7 +5,7 @@ import ModuleSelector from './components/ModuleSelector';
 import WorkersApp from './components/WorkersApp';
 import ManagementApp from './ManagementApp';
 import AdminApp from './components/AdminApp';
-import { UserProfile, getCurrentUser, getAvailableModules } from './lib/authApi';
+import { UserProfile, getCurrentUser } from './lib/authApi';
 
 type AppView = 'login' | 'module-selector' | 'workers' | 'management' | 'admin';
 
@@ -20,12 +20,6 @@ function App() {
 
   const checkAuth = async () => {
     setLoading(true);
-    
-    // Сначала очищаем localStorage от старых данных
-    const hasAuth = localStorage.getItem('sb-yytqmdanfcwfqfqruvta-auth-token');
-    if (!hasAuth) {
-      localStorage.removeItem('lastSelectedModule');
-    }
     
     try {
       const { user, error } = await getCurrentUser();
@@ -49,19 +43,9 @@ function App() {
         full_name: user.full_name
       });
 
-      // Проверяем сохранённый последний модуль
-      const lastModule = localStorage.getItem('lastSelectedModule') as AppView | null;
-      const availableModules = getAvailableModules(user);
-
-      console.log('App checkAuth: Доступные модули:', availableModules, 'Роль пользователя:', user.role, 'Последний модуль:', lastModule);
-
-      // Если есть сохранённый модуль и он доступен - открываем его
-      if (lastModule && availableModules.includes(lastModule)) {
-        setCurrentView(lastModule);
-      } else {
-        // Иначе показываем экран выбора модулей
-        setCurrentView('module-selector');
-      }
+      // По запросу: всегда показываем экран выбора модуля после авторизации.
+      localStorage.removeItem('lastSelectedModule');
+      setCurrentView('module-selector');
     } catch (err) {
       // При любой ошибке показываем логин
       console.error('Ошибка проверки авторизации:', err);
@@ -74,17 +58,9 @@ function App() {
 
   const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
-    const availableModules = getAvailableModules(user);
-    
-    // Если у пользователя доступен только один модуль - открываем его сразу
-    if (availableModules.length === 1) {
-      const module = availableModules[0] as AppView;
-      localStorage.setItem('lastSelectedModule', module);
-      setCurrentView(module);
-    } else {
-      // Иначе показываем экран выбора модулей
-      setCurrentView('module-selector');
-    }
+    // Всегда показываем экран выбора модуля.
+    localStorage.removeItem('lastSelectedModule');
+    setCurrentView('module-selector');
   };
 
   const handleSelectModule = (module: 'workers' | 'management' | 'admin') => {

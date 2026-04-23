@@ -1,52 +1,95 @@
 import { supabase } from './supabase';
 
 // Типы для проектов
+// Новая схема Supabase (projects): id, name, description, start_date, end_date,
+// status (enum: active|completed|paused|canceled), created_at, updated_at.
+// Остальные поля (address/progress/total_budget/spent/client/foreman/architect) в БД отсутствуют
+// и остаются только на клиенте для совместимости UI (opt).
+export type ProjectStatusDb = 'active' | 'completed' | 'paused' | 'canceled';
+export type ProjectStatus = ProjectStatusDb | 'planning' | 'construction' | 'on-hold' | 'cancelled';
+
 export interface Project {
   id: string;
   name: string;
   description: string;
-  address: string;
-  status: 'planning' | 'construction' | 'completed' | 'on-hold' | 'cancelled';
-  progress: number;
+  status: ProjectStatus;
   start_date: string;
   end_date: string;
-  total_budget: number;
-  spent: number;
-  client: string;
-  foreman: string;
-  architect: string;
   created_at: string;
   updated_at: string;
+  // Клиентские опциональные поля (не пишутся в БД)
+  address?: string;
+  progress?: number;
+  total_budget?: number;
+  spent?: number;
+  client?: string;
+  foreman?: string;
+  architect?: string;
   created_by?: string;
 }
 
 export interface ProjectInput {
   name: string;
   description: string;
-  address: string;
-  status: 'planning' | 'construction' | 'completed' | 'on-hold' | 'cancelled';
+  status: ProjectStatus;
   start_date: string;
   end_date: string;
-  total_budget: number;
-  client: string;
-  foreman: string;
-  architect: string;
+  // Клиентские поля — в БД не пишутся (игнорируются).
+  address?: string;
+  total_budget?: number;
+  client?: string;
+  foreman?: string;
+  architect?: string;
 }
 
 export interface ProjectUpdate {
   name?: string;
   description?: string;
-  address?: string;
-  status?: 'planning' | 'construction' | 'completed' | 'on-hold' | 'cancelled';
-  progress?: number;
+  status?: ProjectStatus;
   start_date?: string;
   end_date?: string;
+  // Клиентские поля — в БД не пишутся.
+  address?: string;
+  progress?: number;
   total_budget?: number;
   spent?: number;
   client?: string;
   foreman?: string;
   architect?: string;
 }
+
+// Маппинг UI-статусов в БД-статусып projects.
+const toDbProjectStatus = (s: ProjectStatus | undefined): ProjectStatusDb | undefined => {
+  if (!s) return undefined;
+  switch (s) {
+    case 'planning':
+    case 'construction':
+      return 'active';
+    case 'on-hold':
+      return 'paused';
+    case 'cancelled':
+      return 'canceled';
+    case 'active':
+    case 'completed':
+    case 'paused':
+    case 'canceled':
+      return s;
+    default:
+      return 'active';
+  }
+};
+
+// Выделить только поля, присутствующие в схеме projects.
+const pickDbProjectFields = (p: Partial<Project>): Record<string, any> => {
+  const out: Record<string, any> = {};
+  if (p.name !== undefined) out.name = p.name;
+  if (p.description !== undefined) out.description = p.description;
+  if (p.start_date !== undefined) out.start_date = p.start_date;
+  if (p.end_date !== undefined) out.end_date = p.end_date;
+  const mapped = toDbProjectStatus(p.status as ProjectStatus);
+  if (mapped !== undefined) out.status = mapped;
+  return out;
+};
 
 export interface ProjectStats {
   totalProjects: number;
@@ -113,10 +156,11 @@ export const getProjectById = async (id: string): Promise<Project | null> => {
  */
 export const getProjectsByStatus = async (status: string): Promise<Project[]> => {
   try {
+    const dbStatus = toDbProjectStatus(status as ProjectStatus) || status;
     const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .eq('status', status)
+      .eq('status', dbStatus)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -136,10 +180,11 @@ export const getProjectsByStatus = async (status: string): Promise<Project[]> =>
  */
 export const searchProjects = async (searchTerm: string): Promise<Project[]> => {
   try {
+    // В новой схеме есть только name/description— остальное пришлось удалить.
     const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,address.ilike.%${searchTerm}%,client.ilike.%${searchTerm}%`)
+      .or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -159,13 +204,11 @@ export const searchProjects = async (searchTerm: string): Promise<Project[]> => 
  */
 export const createProject = async (project: ProjectInput): Promise<Project | null> => {
   try {
+    // В БД пишем только те поля, которые есть в схеме.
+    const payload = pickDbProjectFields(project as Partial<Project>);
     const { data, error } = await supabase
       .from('projects')
-      .insert([{
-        ...project,
-        progress: 0,
-        spent: 0
-      }])
+      .insert([payload])
       .select()
       .single();
 
@@ -186,9 +229,10 @@ export const createProject = async (project: ProjectInput): Promise<Project | nu
  */
 export const updateProject = async (id: string, updates: ProjectUpdate): Promise<Project | null> => {
   try {
+    const payload = pickDbProjectFields(updates as Partial<Project>);
     const { data, error } = await supabase
       .from('projects')
-      .update(updates)
+      .update(payload)
       .eq('id', id)
       .select()
       .single();
@@ -208,51 +252,18 @@ export const updateProject = async (id: string, updates: ProjectUpdate): Promise
 /**
  * Обновить прогресс проекта
  */
-export const updateProjectProgress = async (id: string, progress: number): Promise<Project | null> => {
-  try {
-    const { data, error } = await supabase
-      .from('projects')
-      .update({ 
-        progress: Math.max(0, Math.min(100, progress))
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Ошибка обновления прогресса проекта:', error);
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Ошибка в updateProjectProgress:', error);
-    return null;
-  }
+export const updateProjectProgress = async (id: string, _progress: number): Promise<Project | null> => {
+  // В новой схеме projects нет колонки progress. Возвращаем текущий проект
+  // без обновления, чтобы не ломать UI. Прогресс вычисляется из progress_data.
+  return getProjectById(id);
 };
 
 /**
  * Обновить потраченную сумму проекта
  */
-export const updateProjectSpent = async (id: string, spent: number): Promise<Project | null> => {
-  try {
-    const { data, error } = await supabase
-      .from('projects')
-      .update({ spent })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Ошибка обновления потраченной суммы проекта:', error);
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Ошибка в updateProjectSpent:', error);
-    return null;
-  }
+export const updateProjectSpent = async (id: string, _spent: number): Promise<Project | null> => {
+  // В новой схеме projects нет колонки spent. Суммы идут из budget_items (если есть).
+  return getProjectById(id);
 };
 
 /**
@@ -336,10 +347,11 @@ export const getProjectStats = async (): Promise<ProjectStats> => {
  */
 export const getActiveProjects = async (): Promise<Project[]> => {
   try {
+    // В БД активные проекты — status = 'active'.
     const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .in('status', ['planning', 'construction'])
+      .in('status', ['active'])
       .order('created_at', { ascending: false });
 
     if (error) {

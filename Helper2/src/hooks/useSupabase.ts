@@ -41,7 +41,7 @@ const getAllFilesFromStorage = async (
       }
 
       const { data: pageData, error: pageError } = await supabaseAdmin.storage
-        .from('architectural-plans')
+        .from('plan')
         .list(path, options)
 
       if (pageError) {
@@ -552,7 +552,7 @@ export const useArchitecturalPlans = (apartmentId: string, building?: 'T' | 'U' 
             .map(async (file) => {
               // Получаем публичный URL для файла
               const { data: urlData } = supabase.storage
-                .from('architectural-plans')
+                .from('plan')
                 .getPublicUrl(file.name)
               
               return {
@@ -625,33 +625,29 @@ export const usePlanUpload = () => {
       setUploading(true)
       setError(null)
 
-      // Генерируем уникальное имя файла
+      // Генерируем уникальное имя файла. Файлы хранятся в корне бакета.
       const fileExt = file.name.split('.').pop()
       const fileName = `${apartmentId}_${planType}_${Date.now()}.${fileExt}`
-      const filePath = `plans/${fileName}`
+      const filePath = fileName
 
-      // Загружаем файл в Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('architectural-plans')
+      // Загружаем файл в Supabase Storage (бакет plan)
+      const { error: uploadError } = await supabase.storage
+        .from('plan')
         .upload(filePath, file)
 
       if (uploadError) throw uploadError
 
       // Получаем публичный URL
       const { data: urlData } = supabase.storage
-        .from('architectural-plans')
+        .from('plan')
         .getPublicUrl(filePath)
 
-      // Сохраняем информацию о плане в базу данных (включая building)
-      const { data: planData, error: planError } = await supabase
+      // Сохраняем информацию о плане в БД (новая схема: только apartment_id + file_url)
+      const { error: planError } = await supabase
         .from('architectural_plans')
         .insert({
           apartment_id: apartmentId,
-          plan_type: planType,
-          file_name: file.name,
           file_url: urlData.publicUrl,
-          file_size: file.size,
-          building: building || 'T' // Сохраняем корпус, по умолчанию Т
         })
         .select()
         .single()

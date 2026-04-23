@@ -204,10 +204,10 @@ export const deleteBudgetItem = async (id: string): Promise<boolean> => {
  */
 export const getProjectBudget = async (projectId: string): Promise<ProjectBudget | null> => {
   try {
-    // Получаем информацию о проекте
+    // В новой схеме projects нет колонки total_budget — берём только то, что есть.
     const { data: projectData, error: projectError } = await supabase
       .from('projects')
-      .select('id, name, total_budget')
+      .select('id, name')
       .eq('id', projectId)
       .single();
 
@@ -228,7 +228,10 @@ export const getProjectBudget = async (projectId: string): Promise<ProjectBudget
       .filter(item => item.type === 'expense')
       .reduce((sum, item) => sum + item.amount, 0);
 
-    const totalBudget = projectData.total_budget || 0;
+    // Общий бюджет проекта не хранится в БД в новой схеме — считаем по доходам.
+    const totalBudget = budgetItems
+      .filter(item => item.type === 'income')
+      .reduce((sum, item) => sum + item.amount, 0);
     const remaining = totalBudget - spent;
     const budgetUsagePercent = totalBudget > 0 ? (spent / totalBudget) * 100 : 0;
 

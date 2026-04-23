@@ -298,9 +298,9 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
       // Определяем, относится ли квартира к корпусу У (используем информацию из getApartmentTypeAndPlan)
       const isBuildingU = building === 'U';
       
-      // Получаем все файлы из Storage
+      // Получаем все файлы из Storage (бакет plan, файлы в корне)
       const { data: allFilesData, error: allFilesError } = await supabaseAdmin.storage
-        .from('architectural-plans')
+        .from('plan')
         .list('', { limit: 1000 });
 
       if (allFilesError) {
@@ -354,20 +354,35 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
       }) || [];
       
       console.log(`📋 Файлы для плана квартиры ${planApartment}:`, planFiles);
-      
-      // Берем первый найденный PDF файл
-      const pdfFile = planFiles.find(file => file.name.toLowerCase().endsWith('.pdf'));
-      
-      if (pdfFile) {
+
+      // В приоритете PNG/JPG превью (как в мобилке)
+      const previewFile = planFiles.find(file => {
+        const name = file.name.toLowerCase();
+        return name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg');
+      });
+
+      if (previewFile) {
         const { data } = supabaseAdmin.storage
-          .from('architectural-plans')
-          .getPublicUrl(pdfFile.name);
-        
-        console.log(`✅ Найден план: ${pdfFile.name} -> ${data.publicUrl}`);
+          .from('plan')
+          .getPublicUrl(previewFile.name);
+
+        console.log(`✅ Найден preview-план: ${previewFile.name} -> ${data.publicUrl}`);
         return data.publicUrl;
       }
 
-      console.log(`❌ PDF план не найден для квартиры ${apartment} (источник: ${planApartment}, корпус: ${isBuildingU ? 'У' : 'Т'})`);
+      // Фолбэк на PDF (для просмотра, если превью нет)
+      const pdfFile = planFiles.find(file => file.name.toLowerCase().endsWith('.pdf'));
+
+      if (pdfFile) {
+        const { data } = supabaseAdmin.storage
+          .from('plan')
+          .getPublicUrl(pdfFile.name);
+
+        console.log(`✅ Найден PDF-план (фолбэк): ${pdfFile.name} -> ${data.publicUrl}`);
+        return data.publicUrl;
+      }
+
+      console.log(`❌ План (preview/PDF) не найден для квартиры ${apartment} (источник: ${planApartment}, корпус: ${isBuildingU ? 'У' : 'Т'})`);
       return null;
     } catch (error) {
       console.error('Error loading apartment plan:', error);
@@ -411,20 +426,7 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
            setSelectedLocation(null);
          };
 
-         // Функция для обработки клика по плану
-         const handlePlanClick = (event: React.MouseEvent<HTMLDivElement>) => {
-           console.log('🖱️ Клик по плану:', { isSelectingLocation, event });
-           if (!isSelectingLocation) {
-             console.log('❌ Режим выбора местоположения не активен');
-             return;
-           }
-           
-           const rect = event.currentTarget.getBoundingClientRect();
-           const x = ((event.clientX - rect.left) / rect.width) * 100;
-           const y = ((event.clientY - rect.top) / rect.height) * 100;
-           
-           console.log('📍 Координаты клика:', { x: x.toFixed(1), y: y.toFixed(1) });
-           
+         const handlePlanLocationSelect = (x: number, y: number) => {
            // Определяем комнату по координатам (примерная логика)
            let room = 'Неизвестная комната';
            if (x < 30 && y < 40) room = 'Кухня';
@@ -433,8 +435,7 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
            else if (x > 30 && x < 70 && y > 40 && y < 80) room = 'Спальня 2';
            else if (x > 70 && y > 40) room = 'Ванная комната';
            else if (x > 30 && x < 70 && y > 80) room = 'Прихожая';
-           
-           console.log('🏠 Определена комната:', room);
+
            setSelectedLocation({ x, y, room });
          };
 
@@ -2579,6 +2580,9 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
                       apartmentId={selectedApartmentForPlan}
                       className="w-full h-full"
                       userRole={userRole}
+                      isSelectingLocation={isSelectingLocation}
+                      onPlanLocationSelect={handlePlanLocationSelect}
+                      selectedLocation={selectedLocation ? { x: selectedLocation.x, y: selectedLocation.y } : null}
                       onDefectClick={(defect) => {
                         console.log('Дефект выбран:', defect);
                       }}
@@ -2588,77 +2592,10 @@ const DefectsView: React.FC<DefectsViewProps> = ({ userRole }) => {
                         loadSupabaseDefects();
                       }}
                     />
-                    
-                    {/* Overlay для выбора местоположения */}
+
                     {isSelectingLocation && (
-                      <div 
-                        className="absolute inset-0 cursor-crosshair bg-blue-500 bg-opacity-10"
-                        onClick={handlePlanClick}
-                        style={{ zIndex: 10 }}
-                      >
-                        {/* Маркер выбранного местоположения */}
-                        {selectedLocation && (
-                          <div
-                            className="absolute w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg transform -translate-x-2 -translate-y-2"
-                            style={{
-                              left: `${selectedLocation.x}%`,
-                              top: `${selectedLocation.y}%`,
-                              zIndex: 20
-                            }}
-                          >
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-red-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                              {selectedLocation.room}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Инструкция */}
-                        <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm">
-                          {selectedLocation ? 'Местоположение выбрано. Нажмите "Подтвердить" или выберите другое место.' : 'Кликните на план, чтобы выбрать местоположение дефекта'}
-                        </div>
-                        
-                        {/* Альтернативные кнопки для выбора местоположения */}
-                        <div className="absolute bottom-4 left-4 bg-white bg-opacity-90 p-3 rounded-lg shadow-lg">
-                          <p className="text-xs text-slate-400 mb-2">Или выберите из списка:</p>
-                          <div className="grid grid-cols-2 gap-1">
-                            <button
-                              onClick={() => setSelectedLocation({ x: 15, y: 20, room: 'Кухня' })}
-                              className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-800"
-                            >
-                              Кухня
-                            </button>
-                            <button
-                              onClick={() => setSelectedLocation({ x: 50, y: 20, room: 'Гостиная' })}
-                              className="text-xs px-2 py-1 bg-green-100 hover:bg-green-200 rounded text-green-800"
-                            >
-                              Гостиная
-                            </button>
-                            <button
-                              onClick={() => setSelectedLocation({ x: 15, y: 60, room: 'Спальня 1' })}
-                              className="text-xs px-2 py-1 bg-purple-100 hover:bg-purple-200 rounded text-purple-800"
-                            >
-                              Спальня 1
-                            </button>
-                            <button
-                              onClick={() => setSelectedLocation({ x: 50, y: 60, room: 'Спальня 2' })}
-                              className="text-xs px-2 py-1 bg-purple-100 hover:bg-purple-200 rounded text-purple-800"
-                            >
-                              Спальня 2
-                            </button>
-                            <button
-                              onClick={() => setSelectedLocation({ x: 85, y: 60, room: 'Ванная' })}
-                              className="text-xs px-2 py-1 bg-yellow-100 hover:bg-yellow-200 rounded text-yellow-800"
-                            >
-                              Ванная
-                            </button>
-                            <button
-                              onClick={() => setSelectedLocation({ x: 50, y: 90, room: 'Прихожая' })}
-                              className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-800"
-                            >
-                              Прихожая
-                            </button>
-                          </div>
-                        </div>
+                      <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm" style={{ zIndex: 20 }}>
+                        {selectedLocation ? 'Местоположение выбрано. Нажмите "Подтвердить" или выберите другое место.' : 'Кликните на план, чтобы выбрать местоположение дефекта'}
                       </div>
                     )}
                   </div>

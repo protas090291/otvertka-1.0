@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Шаг 1 деплоя: конфигурация из переменных окружения (см. .env.production и env.example)
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').trim() || 'https://yytqmdanfcwfqfqruvta.supabase.co';
-const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').trim() || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dHFtZGFuZmN3ZnFmcXJ1dnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc1MzMzNDEsImV4cCI6MjA3MzEwOTM0MX0.vCgOY0MVZ6oGlZuK8SRhD8YhNyEsjP65ebJuWjy8HPw';
-const supabaseServiceKey = (import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY ?? '').trim() || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dHFtZGFuZmN3ZnFmcXJ1dnRhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzUzMzM0MSwiZXhwIjoyMDczMTA5MzQxfQ.ni200CDPDR225aDJhBHQXh17t0fnX8bXuzYflOTPYnM';
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').trim() || 'https://sesobrtsfuzoimvernct.supabase.co';
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').trim() || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlc29icnRzZnV6b2ltdmVybmN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwNzQ0NDYsImV4cCI6MjA5MTY1MDQ0Nn0.qWdOgpUaFmiMv3gJ2HmiyfoNsSDQnIMBG4N4ikRYvJM';
+const supabaseServiceKey = (import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY ?? '').trim() || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlc29icnRzZnV6b2ltdmVybmN0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjA3NDQ0NiwiZXhwIjoyMDkxNjUwNDQ2fQ.5i9KFa1S7BFpJUwHYF9-H_0FE4vhGvmUfpxJXq-isIk';
 
 const DEFAULT_TIMEOUT = 15000; // Увеличиваем таймаут до 15 секунд
 

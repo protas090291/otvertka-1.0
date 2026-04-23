@@ -7,10 +7,15 @@ export interface UserProfile {
   email: string;
   full_name: string | null;
   role: UserRole;
-  is_active: boolean;
-  created_by: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * Оставлено для совместимости с UI. В новой схеме Supabase колонки is_active нет —
+   * все пользователи считаются активными.
+   */
+  is_active?: boolean;
+  /** Устаревшее поле (нет в схеме); оставлено опциональным для совместимости. */
+  created_by?: string | null;
 }
 
 export interface LoginCredentials {
@@ -70,9 +75,8 @@ export const signIn = async (credentials: LoginCredentials): Promise<{ user: Use
           .insert({
             id: authData.user.id,
             email: authData.user.email || credentials.email,
-            full_name: authData.user.user_metadata?.full_name || null,
+            full_name: authData.user.user_metadata?.full_name || authData.user.email || '',
             role: authData.user.user_metadata?.role || 'user',
-            is_active: true,
           })
           .select()
           .single();
@@ -90,12 +94,7 @@ export const signIn = async (credentials: LoginCredentials): Promise<{ user: Use
       return { user: null, error: 'Профиль пользователя не найден. Обратитесь к администратору для создания профиля.' };
     }
 
-    // Проверяем, активен ли пользователь
-    if (!profile.is_active) {
-      await supabase.auth.signOut();
-      return { user: null, error: 'Аккаунт деактивирован. Обратитесь к администратору.' };
-    }
-
+    // Проверка is_active убрана — колонки нет в новой схеме user_profiles.
     return { user: profile, error: null };
   } catch (error: any) {
     console.error('Ошибка входа:', error);
@@ -171,13 +170,7 @@ export const getCurrentUser = async (): Promise<{ user: UserProfile | null; erro
       email: profile.email,
       role: profile.role,
       full_name: profile.full_name,
-      is_active: profile.is_active
     });
-
-    if (!profile.is_active) {
-      await supabase.auth.signOut();
-      return { user: null, error: 'Аккаунт деактивирован' };
-    }
 
     return { user: profile, error: null };
   } catch (error: any) {
@@ -221,7 +214,6 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       id: data.id,
       email: data.email,
       role: data.role,
-      is_active: data.is_active
     });
 
     return data as UserProfile;
@@ -258,10 +250,10 @@ export const getAllUserProfiles = async (): Promise<{ profiles: UserProfile[]; e
  */
 export const getAssignableUserProfiles = async (): Promise<{ profiles: UserProfile[]; error: string | null }> => {
   try {
+    // Колонки is_active в новой схеме нет — берём все профили.
     const { data, error } = await supabaseAdmin
       .from('user_profiles')
       .select('id, email, full_name, role')
-      .eq('is_active', true)
       .order('full_name', { ascending: true, nullsFirst: false });
 
     if (error) {
@@ -294,18 +286,15 @@ export const createUser = async (userData: CreateUserData): Promise<{ user: User
       return { user: null, error: authError?.message || 'Ошибка создания пользователя' };
     }
 
-    const currentUserId = (await supabase.auth.getUser()).data.user?.id || null;
-
-    // Триггер on_auth_user_created мог уже создать профиль — сначала пробуем вставку, при конфликте обновляем
+    // Триггер on_auth_user_created мог уже создать профиль — сначала пробуем вставку, при конфликте обновляем.
+    // Поля is_active и created_by в новой схеме отсутствуют.
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('user_profiles')
       .insert({
         id: authData.user.id,
         email: userData.email,
-        full_name: userData.full_name || null,
+        full_name: userData.full_name || userData.email,
         role: userData.role,
-        is_active: true,
-        created_by: currentUserId,
       })
       .select()
       .single();
@@ -316,10 +305,8 @@ export const createUser = async (userData: CreateUserData): Promise<{ user: User
         const { data: updatedProfile, error: updateError } = await supabaseAdmin
           .from('user_profiles')
           .update({
-            full_name: userData.full_name || null,
+            full_name: userData.full_name || userData.email,
             role: userData.role,
-            is_active: true,
-            created_by: currentUserId,
           })
           .eq('id', authData.user.id)
           .select()
@@ -348,7 +335,7 @@ export const createUser = async (userData: CreateUserData): Promise<{ user: User
  */
 export const updateUserProfile = async (
   userId: string,
-  updates: Partial<Pick<UserProfile, 'full_name' | 'role' | 'is_active'>>
+  updates: Partial<Pick<UserProfile, 'full_name' | 'role'>>
 ): Promise<{ user: UserProfile | null; error: string | null }> => {
   try {
     const { data, error } = await supabaseAdmin

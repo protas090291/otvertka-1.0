@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertTriangle, CheckCircle, Eye, X, ChevronDown, Clock } from 'lucide-react';
+import { AlertTriangle, CheckCircle, X, ChevronDown } from 'lucide-react';
 import { SupabaseDefect, UserRole } from '../types';
 import { getDefectsByApartment, updateDefectStatus } from '../lib/hybridDefectsApi';
 
@@ -10,6 +10,9 @@ interface PlanWithSupabaseDefectsProps {
   onDefectClick?: (defect: SupabaseDefect) => void;
   userRole?: UserRole;
   onStatusChange?: (defectId: string, newStatus: string) => void;
+  isSelectingLocation?: boolean;
+  onPlanLocationSelect?: (xPct: number, yPct: number) => void;
+  selectedLocation?: { x: number; y: number } | null;
 }
 
 const PlanWithSupabaseDefects: React.FC<PlanWithSupabaseDefectsProps> = ({ 
@@ -18,7 +21,10 @@ const PlanWithSupabaseDefects: React.FC<PlanWithSupabaseDefectsProps> = ({
   className = '',
   onDefectClick,
   userRole = 'technadzor',
-  onStatusChange
+  onStatusChange,
+  isSelectingLocation = false,
+  onPlanLocationSelect,
+  selectedLocation = null
 }) => {
   const [defects, setDefects] = useState<SupabaseDefect[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +32,7 @@ const PlanWithSupabaseDefects: React.FC<PlanWithSupabaseDefectsProps> = ({
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{x: number, y: number, direction: 'up' | 'down'} | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const planImgRef = useRef<HTMLImageElement>(null);
 
   // Загружаем дефекты для квартиры
   useEffect(() => {
@@ -75,8 +82,7 @@ const PlanWithSupabaseDefects: React.FC<PlanWithSupabaseDefectsProps> = ({
     const spaceBelow = mapRect.bottom - rect.bottom;
     const spaceAbove = rect.top - mapRect.top;
     const spaceRight = mapRect.right - rect.left;
-    const spaceLeft = rect.left - mapRect.left;
-    
+
     // Определяем направление по вертикали (flip logic)
     let direction: 'up' | 'down' = 'down';
     let y = rect.bottom + 4;
@@ -214,31 +220,36 @@ const PlanWithSupabaseDefects: React.FC<PlanWithSupabaseDefectsProps> = ({
     return status === 'active' ? AlertTriangle : CheckCircle;
   };
 
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+  const handlePlanClick = (event: React.MouseEvent) => {
+    if (!isSelectingLocation || !onPlanLocationSelect) return;
+    if (!planImgRef.current) return;
+
+    const rect = planImgRef.current.getBoundingClientRect();
+    const xPx = event.clientX - rect.left;
+    const yPx = event.clientY - rect.top;
+    const xPct = clamp((xPx / rect.width) * 100, 0, 100);
+    const yPct = clamp((yPx / rect.height) * 100, 0, 100);
+
+    onPlanLocationSelect(xPct, yPct);
+  };
+
   return (
     <div className={`relative map-container ${className}`} style={{ overflow: 'visible' }}>
-      {/* PDF Viewer */}
-      <div style={{ 
-        transform: 'scale(1.25)', 
-        transformOrigin: 'top left',
-        width: '80%',
-        height: '80%'
-      }}>
-        <iframe
-          src={`https://docs.google.com/gview?url=${encodeURIComponent(planUrl)}&embedded=true&toolbar=0&zoom=117`}
-          className="w-full h-full border-0"
-          style={{ 
-            margin: 0, 
-            padding: 0,
-            pointerEvents: 'none',
-            userSelect: 'none',
-            touchAction: 'none'
-          }}
-          title={`План квартиры ${apartmentId}`}
-        />
-      </div>
-      
-      {/* Overlay с дефектами */}
-      <div className="absolute inset-0 pointer-events-auto" style={{ zIndex: 10, transform: 'scale(1.25)', transformOrigin: 'top left', width: '80%', height: '80%' }}>
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="relative inline-block" onClick={handlePlanClick}>
+          <img
+            ref={planImgRef}
+            src={planUrl}
+            alt={`План квартиры ${apartmentId}`}
+            className="block max-w-full max-h-full select-none"
+            style={{ userSelect: 'none', touchAction: 'none' }}
+            draggable={false}
+          />
+
+          {/* Overlay с дефектами/маркером выбора */}
+          <div className="absolute inset-0" style={{ zIndex: 10 }}>
         {loading ? (
           <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm">
             Загрузка дефектов...
@@ -252,7 +263,7 @@ const PlanWithSupabaseDefects: React.FC<PlanWithSupabaseDefectsProps> = ({
             return (
               <div
                 key={defect.id}
-                className="absolute pointer-events-auto"
+                className="absolute"
                 style={{
                   left: `${defect.x_coord}%`,
                   top: `${defect.y_coord}%`,
@@ -296,6 +307,22 @@ const PlanWithSupabaseDefects: React.FC<PlanWithSupabaseDefectsProps> = ({
             );
           })
         )}
+
+        {/* Маркер выбранного местоположения (режим создания) */}
+        {isSelectingLocation && selectedLocation && (
+          <div
+            className="absolute"
+            style={{
+              left: `${selectedLocation.x}%`,
+              top: `${selectedLocation.y}%`,
+              transform: 'translate(-50%, -50%)'
+            }}
+          >
+            <div className="w-5 h-5 bg-blue-500 rounded-full border-2 border-white shadow-lg" />
+          </div>
+        )}
+          </div>
+        </div>
       </div>
 
       {/* Dropdown меню для изменения статуса */}

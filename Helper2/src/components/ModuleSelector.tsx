@@ -9,7 +9,6 @@ interface ModuleSelectorProps {
 const ModuleSelector: React.FC<ModuleSelectorProps> = ({ onSelectModule }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [availableModules, setAvailableModules] = useState<string[]>([]);
 
   useEffect(() => {
     loadUser();
@@ -24,27 +23,14 @@ const ModuleSelector: React.FC<ModuleSelectorProps> = ({ onSelectModule }) => {
       window.location.reload();
       return;
     }
-    
+
     console.log('ModuleSelector: Загружен пользователь:', {
       email: currentUser.email,
       role: currentUser.role,
       full_name: currentUser.full_name
     });
-    
+
     setUser(currentUser);
-    
-    // Определяем доступные модули
-    const modules: string[] = ['workers']; // Всегда доступен модуль "Рабочий состав"
-    if (currentUser.role === 'management' || currentUser.role === 'admin') {
-      modules.push('management');
-    }
-    if (currentUser.role === 'admin') {
-      modules.push('admin');
-    }
-    
-    console.log('ModuleSelector: Доступные модули:', modules, 'Роль:', currentUser.role);
-    
-    setAvailableModules(modules);
     setLoading(false);
   };
 
@@ -99,7 +85,8 @@ const ModuleSelector: React.FC<ModuleSelectorProps> = ({ onSelectModule }) => {
     },
   ];
 
-  const visibleModules = modules.filter((m) => availableModules.includes(m.id));
+  // Показываем все модули независимо от роли пользователя.
+  const visibleModules = modules;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">

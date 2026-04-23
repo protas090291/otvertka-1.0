@@ -73,12 +73,15 @@ export const createDefect = async (defect: Omit<SupabaseDefect, 'id' | 'created_
 
 /**
  * Обновить статус дефекта
+ * Примечание: DB enum = 'opened' | 'active' | 'resolved' | 'canceled'.
+ * UI передаёт 'active' | 'fixed', маппим на 'opened' и 'resolved' соответственно.
  */
 export const updateDefectStatus = async (defectId: string, status: 'active' | 'fixed'): Promise<SupabaseDefect | null> => {
   try {
+    const dbStatus = status === 'fixed' ? 'resolved' : 'opened';
     const { data, error } = await supabase
       .from('defects')
-      .update({ status })
+      .update({ status: dbStatus })
       .eq('id', defectId)
       .select()
       .single();
@@ -148,10 +151,11 @@ export const uploadDefectPhoto = async (file: File, defectId: string): Promise<s
   try {
     const fileExt = file.name.split('.').pop();
     const fileName = `${defectId}-${Date.now()}.${fileExt}`;
-    const filePath = `defect-photos/${fileName}`;
+    // Файлы хранятся в корне бакета defects_images
+    const filePath = fileName;
 
-    const { data, error } = await supabase.storage
-      .from('defect-photos')
+    const { error } = await supabase.storage
+      .from('defects_images')
       .upload(filePath, file);
 
     if (error) {
@@ -161,7 +165,7 @@ export const uploadDefectPhoto = async (file: File, defectId: string): Promise<s
 
     // Получаем публичный URL
     const { data: urlData } = supabase.storage
-      .from('defect-photos')
+      .from('defects_images')
       .getPublicUrl(filePath);
 
     return urlData.publicUrl;
